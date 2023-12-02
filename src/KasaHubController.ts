@@ -1,4 +1,4 @@
-import { TapoDeviceKey, cloudLogin, listDevicesByType, loginDevice, securePassthrough } from 'tp-link-tapo-connect';
+import { TapoDeviceKey, cloudLogin, loginDeviceByIp, securePassthrough } from 'tp-link-tapo-connect';
 
 export type ChildSensorDevice = {
   cloudToken: string;
@@ -13,7 +13,7 @@ export type ChildSensorDevice = {
 
 export class KasaHubController {
   static cloudToken = '';
-  static async discoverDevices(email: string, password: string): Promise<Array<ChildSensorDevice>> {
+  static async discoverDevices(email: string, password: string, hubs: string[]): Promise<Array<ChildSensorDevice>> {
     const deviceList: Array<ChildSensorDevice> = [];
     try {
       if (!this.cloudToken) {
@@ -24,14 +24,12 @@ export class KasaHubController {
           return deviceList;
         }
       }
-      const hubs = await listDevicesByType(this.cloudToken, 'SMART.KASAHUB');
-
       if (hubs.length === 0) {
         return deviceList;
       }
 
       for (const hub of hubs) {
-        const deviceToken = await loginDevice(email, password, hub);
+        const deviceToken = await loginDeviceByIp(email, password, hub);
         const devices = await KasaHubController.get_child_device_list(deviceToken);
 
         for (const device of devices.child_device_list) {

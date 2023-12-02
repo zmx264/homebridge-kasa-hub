@@ -50,7 +50,7 @@ export class ExampleHomebridgePlatform implements DynamicPlatformPlugin {
       return;
     }
 
-    const devices = await KasaHubController.discoverDevices(this.config.email, this.config.password);
+    const devices = await KasaHubController.discoverDevices(this.config.email, this.config.password, this.config.devices);
 
     for (const device of devices) {
       const uuid = this.api.hap.uuid.generate(device.uniqueId);

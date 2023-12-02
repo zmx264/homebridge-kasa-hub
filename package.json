@@ -1,9 +1,9 @@
 {
-  "private": true,
-  "displayName": "Kasa thermostat",
+  "private": false,
+  "displayName": "TPLink Tapo / Kasa hub",
   "name": "homebridge-kasa-hub",
-  "version": "1.0.0",
-  "description": "A short description about what your plugin does.",
+  "version": "0.0.1",
+  "description": "TPLink Tapo / Kasa hub",
   "license": "Apache-2.0",
   "repository": {
     "type": "git",

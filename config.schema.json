@@ -9,13 +9,28 @@
         "title": "Email",
         "type": "string",
         "required": true,
-        "description": "TPLink / Kasa account email."
+        "description": "TPLink Tapo / Kasa account email."
       },
       "password": {
         "title": "Password",
         "type": "string",
         "required": true,
-        "description": "TPLink / Kasa account password"
+        "description": "TPLink Tapo / Kasa account password"
+      },
+      "devices": {
+        "title": "Devices",
+        "required": true,
+        "uniqueItems": true,
+        "type": "array",
+        "description": "The IP addresses and the names for your TPLink Tapo / Kasa Devices",
+        "add": "Add",
+        "items": {
+          "title": "IP",
+          "type": "string",
+          "required": true,
+          "format": "ipv4",
+          "minLength": 1
+        }
       }
     }
   }
