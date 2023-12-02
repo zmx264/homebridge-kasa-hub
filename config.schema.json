@@ -1,15 +1,21 @@
 {
-  "pluginAlias": "ExampleHomebridgePlugin",
+  "pluginAlias": "KasaHub",
   "pluginType": "platform",
   "singular": true,
   "schema": {
     "type": "object",
     "properties": {
-      "name": {
-        "title": "Name",
+      "email": {
+        "title": "Email",
         "type": "string",
         "required": true,
-        "default": "Example Dynamic Platform"
+        "description": "TPLink / Kasa account email."
+      },
+      "password": {
+        "title": "Password",
+        "type": "string",
+        "required": true,
+        "description": "TPLink / Kasa account password"
       }
     }
   }
