@@ -1,10 +1,11 @@
 import { API, DynamicPlatformPlugin, Logger, PlatformAccessory, PlatformConfig, Service, Characteristic } from 'homebridge';
 
 import { PLATFORM_NAME, PLUGIN_NAME } from './settings';
-import { KasaThermostatAccessory } from './KasaThermostatAccessory';
-import { KasaHubController } from './KasaHubController';
+import { KasaTemperatureHumiditySensor } from './KasaTemperatureHumiditySensor';
+import { KasaHubController, ChildDeviceType } from './KasaHubController';
+import { KasaThermostat } from './KasaThermostat';
 
-export class ExampleHomebridgePlatform implements DynamicPlatformPlugin {
+export class KasaHubPlatform implements DynamicPlatformPlugin {
   public readonly Service: typeof Service = this.api.hap.Service;
   public readonly Characteristic: typeof Characteristic = this.api.hap.Characteristic;
 
@@ -17,16 +18,14 @@ export class ExampleHomebridgePlatform implements DynamicPlatformPlugin {
     public readonly config: PlatformConfig,
     public readonly api: API,
   ) {
-    this.log.debug('Finished initializing platform:', this.config.name);
 
     this.api.on('didFinishLaunching', () => {
       log.debug('Executed didFinishLaunching callback');
 
       this.discoverDevices();
       this.interval = setInterval(() => {
-        log.debug('Discovery...');
         this.discoverDevices();
-      }, 30 * 1000);
+      }, (this.config.refresh_interval ?? 60) * 1000);
     });
 
     this.api.on('shutdown', () => {
@@ -61,17 +60,33 @@ export class ExampleHomebridgePlatform implements DynamicPlatformPlugin {
         this.log.info('Restoring existing accessory from cache:', existingAccessory.displayName);
 
         existingAccessory.context.device = device;
-        //console.log(existingAccessory.context.device);
         this.api.updatePlatformAccessories([existingAccessory]);
-
-        new KasaThermostatAccessory(this, existingAccessory);
+        switch (device.deviceType) {
+          case ChildDeviceType.TemperatureHumiditySensor:
+            new KasaTemperatureHumiditySensor(this, existingAccessory);
+            break;
+          case ChildDeviceType.Thermostat:
+            new KasaThermostat(this, existingAccessory);
+            break;
+        }
+        if (device.deviceType === ChildDeviceType.TemperatureHumiditySensor) {
+          new KasaTemperatureHumiditySensor(this, existingAccessory);
+        }
       } else {
         this.log.info('Adding new accessory:', device.name);
 
         const accessory = new this.api.platformAccessory(device.name, uuid);
 
         accessory.context.device = device;
-        new KasaThermostatAccessory(this, accessory);
+
+        switch (device.deviceType) {
+          case ChildDeviceType.TemperatureHumiditySensor:
+            new KasaTemperatureHumiditySensor(this, accessory);
+            break;
+          case ChildDeviceType.Thermostat:
+            new KasaThermostat(this, accessory);
+            break;
+        }
 
         this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
       }

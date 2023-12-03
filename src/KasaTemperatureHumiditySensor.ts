@@ -1,13 +1,13 @@
 import { Service, PlatformAccessory } from 'homebridge';
 
-import { ExampleHomebridgePlatform } from './platform';
+import { KasaHubPlatform } from './platform';
 
-export class KasaThermostatAccessory {
+export class KasaTemperatureHumiditySensor {
   private temperatureService: Service;
   private humidityService: Service;
 
   constructor(
-    private readonly platform: ExampleHomebridgePlatform,
+    private readonly platform: KasaHubPlatform,
     private readonly accessory: PlatformAccessory,
   ) {
 
@@ -18,10 +18,10 @@ export class KasaThermostatAccessory {
       .setCharacteristic(this.platform.Characteristic.FirmwareRevision, this.accessory.context.device.firmware)
       .setCharacteristic(this.platform.Characteristic.SerialNumber, this.accessory.context.device.uniqueId);
 
-    // eslint-disable-next-line max-len
-    this.temperatureService = this.accessory.getService(this.platform.Service.TemperatureSensor) || this.accessory.addService(this.platform.Service.TemperatureSensor);
-    // eslint-disable-next-line max-len
-    this.humidityService = this.accessory.getService(this.platform.Service.HumiditySensor) || this.accessory.addService(this.platform.Service.HumiditySensor);
+    this.temperatureService = this.accessory.getService(this.platform.Service.TemperatureSensor) ||
+      this.accessory.addService(this.platform.Service.TemperatureSensor);
+    this.humidityService = this.accessory.getService(this.platform.Service.HumiditySensor) ||
+      this.accessory.addService(this.platform.Service.HumiditySensor);
 
     this.temperatureService.setCharacteristic(this.platform.Characteristic.Name, this.accessory.context.device.name);
     this.humidityService.setCharacteristic(this.platform.Characteristic.Name, this.accessory.context.device.name);
