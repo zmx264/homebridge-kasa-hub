@@ -1,7 +1,7 @@
 import { Service, PlatformAccessory } from 'homebridge';
 
 import { KasaHubPlatform } from './platform';
-import { KasaHubController } from './KasaHubController';
+import { ChildDevice } from './KasaHubController';
 
 export class KasaThermostat {
   private thermoStatService: Service;
@@ -11,7 +11,7 @@ export class KasaThermostat {
     private readonly accessory: PlatformAccessory,
   ) {
 
-    const device = this.accessory.context.device;
+    const device: ChildDevice = this.accessory.context.device;
 
     this.accessory.getService(this.platform.Service.AccessoryInformation)!
       .setCharacteristic(this.platform.Characteristic.Model, device.model)
@@ -54,7 +54,7 @@ export class KasaThermostat {
 
   handleCurrentHeatingCoolingStateGet() {
     let currentValue = this.platform.Characteristic.CurrentHeatingCoolingState.OFF;
-    const device = this.accessory.context.device;
+    const device: ChildDevice = this.accessory.context.device;
     if (!device.frost_protection_on) {
       currentValue = this.platform.Characteristic.CurrentHeatingCoolingState.HEAT;
     }
@@ -63,19 +63,19 @@ export class KasaThermostat {
   }
 
   handleTargetHeatingCoolingStateSet(value) {
-    const device = this.accessory.context.device;
+    const device: ChildDevice = this.accessory.context.device;
 
     if (value === this.platform.Characteristic.TargetHeatingCoolingState.OFF) {
-      KasaHubController.set_on(false, device.uniqueId, device.deviceKey);
+      device.tapoConnect.set_on(false, device.uniqueId);
     } else {
-      KasaHubController.set_on(true, device.uniqueId, device.deviceKey);
+      device.tapoConnect.set_on(true, device.uniqueId);
     }
 
     this.platform.discoverDevices();
   }
 
   handleTargetHeatingCoolingStateGet() {
-    const device = this.accessory.context.device;
+    const device: ChildDevice = this.accessory.context.device;
 
     let currentValue = this.platform.Characteristic.TargetHeatingCoolingState.OFF;
     if (!device.frost_protection_on) {
@@ -89,18 +89,18 @@ export class KasaThermostat {
   }
 
   handleTargetTemperatureGet() {
-    const device = this.accessory.context.device;
-    return device.target_temp;
+    const device: ChildDevice = this.accessory.context.device;
+    return device.target_temp!;
   }
 
   handleTargetTemperatureSet(value) {
-    const device = this.accessory.context.device;
-    KasaHubController.set_temp(value, device.uniqueId, device.deviceKey);
+    const device: ChildDevice = this.accessory.context.device;
+    device.tapoConnect.set_temp(value, device.uniqueId);
     this.platform.discoverDevices();
   }
 
   handleTemperatureDisplayUnitsGet() {
-    const device = this.accessory.context.device;
+    const device: ChildDevice = this.accessory.context.device;
     if (device.temp_unit) {
       // eslint-disable-next-line eqeqeq
       return device.temp_unit == 'celsius' ? this.platform.Characteristic.TemperatureDisplayUnits.CELSIUS

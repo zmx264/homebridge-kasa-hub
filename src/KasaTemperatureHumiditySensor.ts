@@ -1,6 +1,7 @@
 import { Service, PlatformAccessory } from 'homebridge';
 
 import { KasaHubPlatform } from './platform';
+import { ChildDevice } from './KasaHubController';
 
 export class KasaTemperatureHumiditySensor {
   private temperatureService: Service;
@@ -10,7 +11,7 @@ export class KasaTemperatureHumiditySensor {
     private readonly platform: KasaHubPlatform,
     private readonly accessory: PlatformAccessory,
   ) {
-    const device = this.accessory.context.device;
+    const device: ChildDevice = this.accessory.context.device;
 
     this.accessory.getService(this.platform.Service.AccessoryInformation)!
       .setCharacteristic(this.platform.Characteristic.Model, device.model)
@@ -48,7 +49,7 @@ export class KasaTemperatureHumiditySensor {
   }
 
   handleStatusLowBatteryGet() {
-    const device = this.accessory.context.device;
+    const device: ChildDevice = this.accessory.context.device;
     const currentValue = device.at_low_battery ? this.platform.Characteristic.StatusLowBattery.BATTERY_LEVEL_LOW :
       this.platform.Characteristic.StatusLowBattery.BATTERY_LEVEL_NORMAL;
     return currentValue;
