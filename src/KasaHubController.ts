@@ -22,7 +22,7 @@ export enum ChildDeviceType {
 }
 
 export class KasaHubController {
-  static readonly log: Logger;
+  static log: Logger;
 
   static cloudToken = '';
   static async discoverDevices(email: string, password: string, hubs: string[]): Promise<Array<ChildDevice>> {

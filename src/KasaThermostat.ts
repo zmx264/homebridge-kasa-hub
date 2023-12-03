@@ -53,18 +53,15 @@ export class KasaThermostat {
 
     if (value === this.platform.Characteristic.TargetHeatingCoolingState.OFF) {
       KasaHubController.set_on(false, device.uniqueId, device.deviceKey);
-      device.heatingState = this.platform.Characteristic.TargetHeatingCoolingState.OFF;
     } else {
       KasaHubController.set_on(true, device.uniqueId, device.deviceKey);
-      device.heatingState = this.platform.Characteristic.TargetHeatingCoolingState.HEAT;
     }
+
+    this.platform.discoverDevices();
   }
 
   handleTargetHeatingCoolingStateGet() {
     const device = this.accessory.context.device;
-    if (device.heatingState !== undefined) {
-      return device.heatingState;
-    }
 
     let currentValue = this.platform.Characteristic.TargetHeatingCoolingState.OFF;
     if (!device.frost_protection_on) {
@@ -79,16 +76,13 @@ export class KasaThermostat {
 
   handleTargetTemperatureGet() {
     const device = this.accessory.context.device;
-    if (device.targetTemp !== undefined) {
-      return device.targetTemp;
-    }
     return device.target_temp;
   }
 
   handleTargetTemperatureSet(value) {
     const device = this.accessory.context.device;
-    device.targetTemp = value;
     KasaHubController.set_temp(value, device.uniqueId, device.deviceKey);
+    this.platform.discoverDevices();
   }
 
   handleTemperatureDisplayUnitsGet() {

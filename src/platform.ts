@@ -18,6 +18,7 @@ export class KasaHubPlatform implements DynamicPlatformPlugin {
     public readonly config: PlatformConfig,
     public readonly api: API,
   ) {
+    KasaHubController.log = log;
 
     this.api.on('didFinishLaunching', () => {
       log.debug('Executed didFinishLaunching callback');
@@ -69,9 +70,6 @@ export class KasaHubPlatform implements DynamicPlatformPlugin {
             new KasaThermostat(this, existingAccessory);
             break;
         }
-        if (device.deviceType === ChildDeviceType.TemperatureHumiditySensor) {
-          new KasaTemperatureHumiditySensor(this, existingAccessory);
-        }
       } else {
         this.log.info('Adding new accessory:', device.name);
 
@@ -89,6 +87,7 @@ export class KasaHubPlatform implements DynamicPlatformPlugin {
         }
 
         this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
+        this.accessories.push(accessory);
       }
     }
   }
