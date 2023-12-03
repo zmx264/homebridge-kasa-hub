@@ -26,14 +26,14 @@
         "description": "Refresh interval (seconds)"
       },
       "devices": {
-        "title": "Devices",
+        "title": "Hubs",
         "required": true,
         "uniqueItems": true,
         "type": "array",
-        "description": "The IP addresses and the names for your TPLink Tapo / Kasa Devices",
+        "description": "The IP addresses and the names for your TPLink Tapo / Kasa Hubs",
         "add": "Add",
         "items": {
-          "title": "IP",
+          "title": "Hub IP",
           "type": "string",
           "required": true,
           "format": "ipv4",

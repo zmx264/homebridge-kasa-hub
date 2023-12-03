@@ -20,6 +20,11 @@ export class KasaHubPlatform implements DynamicPlatformPlugin {
   ) {
     KasaHubController.log = log;
 
+    if (!this.config.email || !this.config.password) {
+      this.log.error('Email and password must be configured, exiting');
+      return;
+    }
+
     this.api.on('didFinishLaunching', () => {
       log.debug('Executed didFinishLaunching callback');
 
@@ -38,18 +43,13 @@ export class KasaHubPlatform implements DynamicPlatformPlugin {
   }
 
   configureAccessory(accessory: PlatformAccessory) {
-    this.log.info('Loading accessory from cache:', accessory.displayName);
+    this.log.debug('Loading accessory from cache:', accessory.displayName);
 
     // add the restored accessory to the accessories cache so we can track if it has already been registered
     this.accessories.push(accessory);
   }
 
   async discoverDevices() {
-    if (!this.config.email || !this.config.password) {
-      this.log.info('No user or password defined');
-      return;
-    }
-
     const devices = await KasaHubController.discoverDevices(this.config.email, this.config.password, this.config.devices);
 
     for (const device of devices) {
@@ -58,7 +58,7 @@ export class KasaHubPlatform implements DynamicPlatformPlugin {
       const existingAccessory = this.accessories.find(accessory => accessory.UUID === uuid);
 
       if (existingAccessory) {
-        this.log.info('Restoring existing accessory from cache:', existingAccessory.displayName);
+        this.log.debug('Restoring existing accessory from cache:', existingAccessory.displayName);
 
         existingAccessory.context.device = device;
         this.api.updatePlatformAccessories([existingAccessory]);
@@ -71,7 +71,7 @@ export class KasaHubPlatform implements DynamicPlatformPlugin {
             break;
         }
       } else {
-        this.log.info('Adding new accessory:', device.name);
+        this.log.debug('Adding new accessory:', device.name);
 
         const accessory = new this.api.platformAccessory(device.name, uuid);
 

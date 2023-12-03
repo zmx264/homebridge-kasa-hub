@@ -11,11 +11,13 @@ export class KasaThermostat {
     private readonly accessory: PlatformAccessory,
   ) {
 
+    const device = this.accessory.context.device;
+
     this.accessory.getService(this.platform.Service.AccessoryInformation)!
-      .setCharacteristic(this.platform.Characteristic.Model, this.accessory.context.device.model)
+      .setCharacteristic(this.platform.Characteristic.Model, device.model)
       .setCharacteristic(this.platform.Characteristic.Manufacturer, 'TP-Link')
-      .setCharacteristic(this.platform.Characteristic.FirmwareRevision, this.accessory.context.device.firmware)
-      .setCharacteristic(this.platform.Characteristic.SerialNumber, this.accessory.context.device.uniqueId);
+      .setCharacteristic(this.platform.Characteristic.FirmwareRevision, device.firmware)
+      .setCharacteristic(this.platform.Characteristic.SerialNumber, device.uniqueId);
 
     this.thermoStatService = this.accessory.getService(this.platform.Service.Thermostat) ||
       this.accessory.addService(this.platform.Service.Thermostat);
@@ -26,6 +28,13 @@ export class KasaThermostat {
     this.thermoStatService.getCharacteristic(this.platform.Characteristic.TargetHeatingCoolingState)
       .onGet(this.handleTargetHeatingCoolingStateGet.bind(this))
       .onSet(this.handleTargetHeatingCoolingStateSet.bind(this));
+    if (Number(this.thermoStatService.getCharacteristic(this.platform.Characteristic.TargetHeatingCoolingState).value) > 1) {
+      this.thermoStatService.getCharacteristic(this.platform.Characteristic.TargetHeatingCoolingState).updateValue(1);
+    }
+    this.thermoStatService.getCharacteristic(this.platform.Characteristic.TargetHeatingCoolingState).setProps({
+      maxValue: 1,
+      validValues: [0, 1],
+    });
 
     this.thermoStatService.getCharacteristic(this.platform.Characteristic.CurrentTemperature)
       .onGet(this.handleCurrentTemperatureGet.bind(this));
@@ -33,6 +42,11 @@ export class KasaThermostat {
     this.thermoStatService.getCharacteristic(this.platform.Characteristic.TargetTemperature)
       .onGet(this.handleTargetTemperatureGet.bind(this))
       .onSet(this.handleTargetTemperatureSet.bind(this));
+    this.thermoStatService.getCharacteristic(this.platform.Characteristic.TargetTemperature).setProps({
+      minValue: device.min_control_temp,
+      maxValue: device.max_control_temp,
+      minStep: 1,
+    });
 
     this.thermoStatService.getCharacteristic(this.platform.Characteristic.TemperatureDisplayUnits)
       .onGet(this.handleTemperatureDisplayUnitsGet.bind(this));

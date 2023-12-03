@@ -7,7 +7,6 @@ export type ChildDevice = {
   uniqueId: string;
   model: string;
   firmware: string;
-  signal_level: number;
   deviceType: ChildDeviceType;
   current_temp?: number;
   current_humidity?: number;
@@ -15,6 +14,9 @@ export type ChildDevice = {
   target_temp?: number;
   temp_unit?: string;
   frost_protection_on?: boolean;
+  min_control_temp?: number;
+  max_control_temp?: number;
+  at_low_battery?: boolean;
 };
 export enum ChildDeviceType {
   TemperatureHumiditySensor,
@@ -31,7 +33,8 @@ export class KasaHubController {
       if (!this.cloudToken) {
         try {
           this.cloudToken = await cloudLogin(email, password);
-        } catch {
+        } catch (e) {
+          this.log.debug('Could not login', e);
           this.cloudToken = '';
           return deviceList;
         }
@@ -61,13 +64,13 @@ export class KasaHubController {
             continue;
           }
           try {
+            //console.info(device);
             const wrapper: ChildDevice = {
               deviceKey: deviceKey,
               name: device.nickname ? Buffer.from(device.nickname, 'base64').toString() : 'empty',
               uniqueId: device.device_id,
               model: device.model,
               firmware: device.fw_ver,
-              signal_level: device.signal_level,
               deviceType: deviceType,
               current_temp: device.current_temp,
               current_humidity: device.current_humidity,
@@ -75,6 +78,9 @@ export class KasaHubController {
               target_temp: device.target_temp,
               temp_unit: device.temp_unit,
               frost_protection_on: device.frost_protection_on,
+              min_control_temp: device.min_control_temp,
+              max_control_temp: device.max_control_temp,
+              at_low_battery: device.at_low_battery,
             };
             deviceList.push(wrapper);
           } catch (e) {
@@ -99,8 +105,8 @@ export class KasaHubController {
     return await securePassthrough(getChildDeviceListRequest, deviceKey);
   }
 
-  static async set_temp(target_temp: number, device_id: string, deviceKey: TapoDeviceKey) {
-    const cmdRequest = {
+  static get_control_child(device_id: string, request: unknown) {
+    return {
       'method': 'control_child',
       'params': {
         'device_id': device_id,
@@ -108,41 +114,33 @@ export class KasaHubController {
           'method': 'multipleRequest',
           'params': {
             'requests': [
-              {
-                'method': 'set_device_info',
-                'params': {
-                  'target_temp': target_temp,
-                  'temp_unit': 'celsius',
-                },
-              },
+              request,
             ],
           },
         },
       },
     };
+  }
+
+  static async set_temp(target_temp: number, device_id: string, deviceKey: TapoDeviceKey) {
+    const cmdRequest = this.get_control_child(device_id, {
+      'method': 'set_device_info',
+      'params': {
+        'target_temp': target_temp,
+        'temp_unit': 'celsius',
+      },
+    });
     return await securePassthrough(cmdRequest, deviceKey);
   }
 
   static async set_on(on: boolean, device_id: string, deviceKey: TapoDeviceKey) {
-    const cmdRequest = {
-      'method': 'control_child',
+    const cmdRequest = this.get_control_child(device_id, {
+      'method': 'set_device_info',
       'params': {
-        'device_id': device_id,
-        'requestData': {
-          'method': 'multipleRequest',
-          'params': {
-            'requests': [
-              {
-                'method': 'set_device_info',
-                'params': {
-                  'frost_protection_on': !on,
-                },
-              },
-            ],
-          },
-        },
+        'frost_protection_on': !on,
       },
-    };
+
+    });
     return await securePassthrough(cmdRequest, deviceKey);
   }
 }
