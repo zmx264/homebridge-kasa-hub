@@ -1,5 +1,6 @@
 import { Logger } from 'homebridge';
 import { TapoConnect } from './TapoConnect';
+import { Mutex } from 'async-mutex';
 
 export type ChildDevice = {
   tapoConnect: TapoConnect;
@@ -24,9 +25,52 @@ export enum ChildDeviceType {
 }
 
 export class KasaHubController {
+  static readonly CACHE_SECONDS = 5;
   static log: Logger;
+  deviceCache: Map<string, ChildDevice> = new Map();
 
-  static async discoverDevices(email: string, password: string, hubs: string[]): Promise<Array<ChildDevice>> {
+  email: string;
+  password: string;
+  hubs: string[];
+
+  mutex = new Mutex();
+  lastUpdate?: number;
+
+  constructor(email: string, password: string, hubs: string[]) {
+    this.email = email;
+    this.password = password;
+    this.hubs = hubs;
+
+  }
+
+  public async getDevice(uniqueId: string): Promise<ChildDevice | undefined> {
+    return await this.mutex.runExclusive(async () => {
+      let update = false;
+      if (this.lastUpdate === undefined || this.deviceCache.size === 0) {
+        update = true;
+      } else if ((Date.now() - this.lastUpdate) / 1000 > KasaHubController.CACHE_SECONDS) {
+        update = true;
+      }
+      if (!update) {
+        return this.deviceCache.get(uniqueId);
+      }
+
+      try {
+        this.deviceCache.clear();
+        const devices = await KasaHubController.getHubDevices(this.email, this.password, this.hubs);
+        for (const device of devices) {
+          this.deviceCache.set(device.uniqueId, device);
+        }
+
+        this.lastUpdate = Date.now();
+        return this.deviceCache.get(uniqueId);
+      } catch (e) {
+        return undefined;
+      }
+    });
+  }
+
+  static async getHubDevices(email: string, password: string, hubs: string[]): Promise<Array<ChildDevice>> {
     const deviceList: Array<ChildDevice> = [];
     try {
       if (hubs.length === 0) {
@@ -55,7 +99,6 @@ export class KasaHubController {
             continue;
           }
           try {
-            //console.info(device);
             const wrapper: ChildDevice = {
               tapoConnect: tapoConnect,
               name: device.nickname ? Buffer.from(device.nickname, 'base64').toString() : 'empty',

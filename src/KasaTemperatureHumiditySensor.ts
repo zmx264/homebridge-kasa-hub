@@ -1,17 +1,24 @@
 import { Service, PlatformAccessory } from 'homebridge';
 
 import { KasaHubPlatform } from './platform';
-import { ChildDevice } from './KasaHubController';
+import { KasaHubController } from './KasaHubController';
 
 export class KasaTemperatureHumiditySensor {
   private temperatureService: Service;
   private humidityService: Service;
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  private deviceUniqueId: any;
+  private hubController: KasaHubController;
+
+
   constructor(
     private readonly platform: KasaHubPlatform,
     private readonly accessory: PlatformAccessory,
   ) {
-    const device: ChildDevice = this.accessory.context.device;
+    this.deviceUniqueId = this.accessory.context.deviceUniqueId;
+    this.hubController = this.accessory.context.hubController;
+    const device = this.accessory.context.tempDevice;
 
     this.accessory.getService(this.platform.Service.AccessoryInformation)!
       .setCharacteristic(this.platform.Characteristic.Model, device.model)
@@ -40,19 +47,20 @@ export class KasaTemperatureHumiditySensor {
       .onGet(this.handleStatusLowBatteryGet.bind(this));
   }
 
-  handleCurrentRelativeHumidityGet() {
-    return this.accessory.context.device.current_humidity;
+  async handleCurrentRelativeHumidityGet() {
+    const device = await this.hubController.getDevice(this.deviceUniqueId);
+    return device!.current_humidity!;
   }
 
-  handleCurrentTemperatureGet() {
-    return this.accessory.context.device.current_temp;
+  async handleCurrentTemperatureGet() {
+    const device = await this.hubController.getDevice(this.deviceUniqueId);
+    return device!.current_temp!;
   }
 
-  handleStatusLowBatteryGet() {
-    const device: ChildDevice = this.accessory.context.device;
-    const currentValue = device.at_low_battery ? this.platform.Characteristic.StatusLowBattery.BATTERY_LEVEL_LOW :
+  async handleStatusLowBatteryGet() {
+    const device = await this.hubController.getDevice(this.deviceUniqueId);
+    const currentValue = device!.at_low_battery ? this.platform.Characteristic.StatusLowBattery.BATTERY_LEVEL_LOW :
       this.platform.Characteristic.StatusLowBattery.BATTERY_LEVEL_NORMAL;
     return currentValue;
   }
-
 }

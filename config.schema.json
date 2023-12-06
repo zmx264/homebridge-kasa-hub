@@ -17,14 +17,6 @@
         "required": true,
         "description": "TPLink Tapo / Kasa account password"
       },
-      "refresh_interval": {
-        "title": "Refresh",
-        "type": "integer",
-        "required": true,
-        "minimum": 10,
-        "default": 60,
-        "description": "Refresh interval (seconds)"
-      },
       "devices": {
         "title": "Hubs",
         "required": true,

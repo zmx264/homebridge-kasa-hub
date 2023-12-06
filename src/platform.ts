@@ -11,7 +11,7 @@ export class KasaHubPlatform implements DynamicPlatformPlugin {
 
   public readonly accessories: PlatformAccessory[] = [];
 
-  interval?: NodeJS.Timer;
+  private hubController!: KasaHubController;
 
   constructor(
     public readonly log: Logger,
@@ -25,20 +25,12 @@ export class KasaHubPlatform implements DynamicPlatformPlugin {
       return;
     }
 
+    this.hubController = new KasaHubController(this.config.email, this.config.password, this.config.devices);
+
     this.api.on('didFinishLaunching', () => {
       log.debug('Executed didFinishLaunching callback');
 
       this.discoverDevices();
-      this.interval = setInterval(() => {
-        this.discoverDevices();
-      }, (this.config.refresh_interval ?? 60) * 1000);
-    });
-
-    this.api.on('shutdown', () => {
-      log.debug('Shutdown...');
-      if (this.interval) {
-        clearInterval(this.interval);
-      }
     });
   }
 
@@ -50,7 +42,7 @@ export class KasaHubPlatform implements DynamicPlatformPlugin {
   }
 
   async discoverDevices() {
-    const devices = await KasaHubController.discoverDevices(this.config.email, this.config.password, this.config.devices);
+    const devices = await KasaHubController.getHubDevices(this.config.email, this.config.password, this.config.devices);
 
     for (const device of devices) {
       const uuid = this.api.hap.uuid.generate(device.uniqueId);
@@ -58,9 +50,12 @@ export class KasaHubPlatform implements DynamicPlatformPlugin {
       const existingAccessory = this.accessories.find(accessory => accessory.UUID === uuid);
 
       if (existingAccessory) {
-        this.log.debug('Restoring existing accessory from cache:', existingAccessory.displayName);
+        this.log.info('Restoring existing accessory from cache:', existingAccessory.displayName);
 
-        existingAccessory.context.device = device;
+        existingAccessory.context.hubController = this.hubController;
+        existingAccessory.context.deviceUniqueId = device.uniqueId;
+        existingAccessory.context.tempDevice = device;
+
         this.api.updatePlatformAccessories([existingAccessory]);
         switch (device.deviceType) {
           case ChildDeviceType.TemperatureHumiditySensor:
@@ -71,11 +66,12 @@ export class KasaHubPlatform implements DynamicPlatformPlugin {
             break;
         }
       } else {
-        this.log.debug('Adding new accessory:', device.name);
+        this.log.info('Adding new accessory:', device.name);
 
         const accessory = new this.api.platformAccessory(device.name, uuid);
-
-        accessory.context.device = device;
+        accessory.context.hubController = this.hubController;
+        accessory.context.deviceUniqueId = device.uniqueId;
+        accessory.context.tempDevice = device;
 
         switch (device.deviceType) {
           case ChildDeviceType.TemperatureHumiditySensor:
