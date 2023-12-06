@@ -11,7 +11,7 @@ export type ChildDevice = {
   deviceType: ChildDeviceType;
   current_temp?: number;
   current_humidity?: number;
-  heating?: boolean;
+  sleep?: boolean;
   target_temp?: number;
   temp_unit?: string;
   frost_protection_on?: boolean;
@@ -83,6 +83,7 @@ export class KasaHubController {
         const devices = await tapoConnect.get_child_device_list();
 
         for (const device of devices.child_device_list) {
+          // console.info(device);
           if (device.status !== 'online') {
             continue;
           }
@@ -108,7 +109,7 @@ export class KasaHubController {
               deviceType: deviceType,
               current_temp: device.current_temp,
               current_humidity: device.current_humidity,
-              heating: device.trv_states ? device.trv_states.every(state => state === 'heating') : false,
+              sleep: device.trv_states ? device.trv_states.length > 0 && device.trv_states.every(state => state === 'shutdown') : false,
               target_temp: device.target_temp,
               temp_unit: device.temp_unit,
               frost_protection_on: device.frost_protection_on,

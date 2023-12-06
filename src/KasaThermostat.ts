@@ -64,7 +64,9 @@ export class KasaThermostat {
     const device = await this.hubController.getDevice(this.deviceUniqueId);
 
     let currentValue = this.platform.Characteristic.CurrentHeatingCoolingState.OFF;
-    if (!device!.frost_protection_on) {
+    if (device!.sleep) {
+      currentValue = this.platform.Characteristic.CurrentHeatingCoolingState.OFF;
+    } else if (!device!.frost_protection_on) {
       currentValue = this.platform.Characteristic.CurrentHeatingCoolingState.HEAT;
     }
 
@@ -73,6 +75,10 @@ export class KasaThermostat {
 
   async handleTargetHeatingCoolingStateSet(value) {
     const device = await this.hubController.getDevice(this.deviceUniqueId)!;
+
+    if (device!.sleep) {
+      return;
+    }
 
     if (value === this.platform.Characteristic.TargetHeatingCoolingState.OFF) {
       device!.frost_protection_on = true;
@@ -87,7 +93,9 @@ export class KasaThermostat {
     const device = await this.hubController.getDevice(this.deviceUniqueId)!;
 
     let currentValue = this.platform.Characteristic.TargetHeatingCoolingState.OFF;
-    if (!device!.frost_protection_on) {
+    if (device!.sleep) {
+      currentValue = this.platform.Characteristic.TargetHeatingCoolingState.OFF;
+    } else if (!device!.frost_protection_on) {
       currentValue = this.platform.Characteristic.TargetHeatingCoolingState.HEAT;
     }
     return currentValue;
@@ -107,6 +115,10 @@ export class KasaThermostat {
 
   async handleTargetTemperatureSet(value) {
     const device = await this.hubController.getDevice(this.deviceUniqueId)!;
+    if (device!.sleep) {
+      return;
+    }
+
     device!.target_temp = value;
     device!.tapoConnect.set_temp(value, this.deviceUniqueId);
   }
