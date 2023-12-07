@@ -1,5 +1,7 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import axios from 'axios';
 import { base64Encode, decrypt, encrypt, generateKeyPair, readDeviceKey, shaDigest } from './TapoCipher';
+import { Logger } from 'homebridge';
 
 export type DeviceKey = {
   key?: Buffer;
@@ -10,13 +12,15 @@ export class TapoConnect {
   private readonly email: string;
   private readonly password: string;
   private readonly deviceIp: string;
+  private readonly log: Logger;
 
   private sessionCookie: string | undefined;
   private deviceKey: DeviceKey = {};
 
   private token: string | undefined;
 
-  constructor(email: string, password: string, deviceIp: string) {
+  constructor(log: Logger, email: string, password: string, deviceIp: string) {
+    this.log = log;
     this.email = email;
     this.password = password;
     this.deviceIp = deviceIp;
@@ -50,8 +54,7 @@ export class TapoConnect {
     this.deviceKey.iv = deviceKey.subarray(16, 32);
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  public async securePassthrough(deviceRequest: any): Promise<any> {
+  private async securePassthrough(deviceRequest: any): Promise<any> {
     const encryptedRequest = encrypt(deviceRequest, this.deviceKey);
     const securePassthroughRequest = {
       'method': 'securePassthrough',
@@ -137,24 +140,34 @@ export class TapoConnect {
   }
 
   public async set_temp(target_temp: number, device_id: string) {
-    const cmdRequest = TapoConnect.get_control_child(device_id, {
-      'method': 'set_device_info',
-      'params': {
-        'target_temp': target_temp,
-        'temp_unit': 'celsius',
-      },
-    });
-    return await this.securePassthrough(cmdRequest);
+    try {
+      const cmdRequest = TapoConnect.get_control_child(device_id, {
+        'method': 'set_device_info',
+        'params': {
+          'target_temp': target_temp,
+          'temp_unit': 'celsius',
+        },
+      });
+      return await this.securePassthrough(cmdRequest);
+    } catch (e: any) {
+      this.log.error(e.message);
+      this.log.debug(e.stack);
+    }
   }
 
   public async set_on(on: boolean, device_id: string) {
-    const cmdRequest = TapoConnect.get_control_child(device_id, {
-      'method': 'set_device_info',
-      'params': {
-        'frost_protection_on': !on,
-      },
+    try {
+      const cmdRequest = TapoConnect.get_control_child(device_id, {
+        'method': 'set_device_info',
+        'params': {
+          'frost_protection_on': !on,
+        },
 
-    });
-    return await this.securePassthrough(cmdRequest);
+      });
+      return await this.securePassthrough(cmdRequest);
+    } catch (e: any) {
+      this.log.error(e.message);
+      this.log.debug(e.stack);
+    }
   }
 }

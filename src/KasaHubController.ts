@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { Logger } from 'homebridge';
 import { TapoConnect } from './TapoConnect';
 import { Mutex } from 'async-mutex';
@@ -45,45 +46,45 @@ export class KasaHubController {
 
   public async getDevice(uniqueId: string): Promise<ChildDevice | undefined> {
     return await this.mutex.runExclusive(async () => {
-      let update = false;
+      let shouldUpdate = false;
       if (this.lastUpdate === undefined || this.deviceCache.size === 0) {
-        update = true;
+        shouldUpdate = true;
       } else if ((Date.now() - this.lastUpdate) / 1000 > KasaHubController.CACHE_SECONDS) {
-        update = true;
+        shouldUpdate = true;
       }
-      if (!update) {
+      if (!shouldUpdate) {
         return this.deviceCache.get(uniqueId);
       }
 
       try {
-        this.deviceCache.clear();
         const devices = await KasaHubController.getHubDevices(this.email, this.password, this.hubs);
+        this.deviceCache.clear();
         for (const device of devices) {
           this.deviceCache.set(device.uniqueId, device);
         }
-
         this.lastUpdate = Date.now();
-        return this.deviceCache.get(uniqueId);
-      } catch (e) {
-        return undefined;
+      } catch (e: any) {
+        const log = KasaHubController.log;
+        log.error(e);
+        log.debug(e.stack);
       }
+      return this.deviceCache.get(uniqueId);
     });
   }
 
   static async getHubDevices(email: string, password: string, hubs: string[]): Promise<Array<ChildDevice>> {
     const deviceList: Array<ChildDevice> = [];
-    try {
-      if (hubs.length === 0) {
-        return deviceList;
-      }
+    if (hubs.length === 0) {
+      return deviceList;
+    }
 
-      for (const hub of hubs) {
-        const tapoConnect = new TapoConnect(email, password, hub);
+    for (const hub of hubs) {
+      try {
+        const tapoConnect = new TapoConnect(this.log, email, password, hub);
         await tapoConnect.login();
         const devices = await tapoConnect.get_child_device_list();
 
         for (const device of devices.child_device_list) {
-          // console.info(device);
           if (device.status !== 'online') {
             continue;
           }
@@ -118,17 +119,16 @@ export class KasaHubController {
               at_low_battery: device.at_low_battery,
             };
             deviceList.push(wrapper);
-          } catch (e) {
-            if (e instanceof Error) {
-              this.log.error(e.message);
-            }
+          } catch (e: any) {
+            this.log.error(e.message);
+            this.log.debug(e.stack);
           }
         }
-      }
-    } catch (e) {
-      if (e instanceof Error) {
+      } catch (e: any) {
         this.log.error(e.message);
+        this.log.debug(e.stack);
       }
+
     }
     return deviceList;
   }
