@@ -75,8 +75,10 @@ export class KasaThermostat {
 
   async handleTargetHeatingCoolingStateSet(value) {
     const device = await this.hubController.getDevice(this.deviceUniqueId)!;
+    this.platform.log.info('[%s] Setting target heating state to: ', device?.name, value);
 
     if (device!.sleep) {
+      this.platform.log.info('[%s] Sleeping, cannot change target heating state');
       return;
     }
 
@@ -115,7 +117,10 @@ export class KasaThermostat {
 
   async handleTargetTemperatureSet(value) {
     const device = await this.hubController.getDevice(this.deviceUniqueId)!;
+    this.platform.log.info('[%s] Setting target temperature to: ', device?.name, value);
+
     if (device!.sleep) {
+      this.platform.log.info('[%s] Sleeping, cannot change temperature');
       return;
     }
 
