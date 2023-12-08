@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { Service, PlatformAccessory } from 'homebridge';
 
 import { KasaHubPlatform } from './platform';
@@ -48,19 +49,40 @@ export class KasaTemperatureHumiditySensor {
   }
 
   async handleCurrentRelativeHumidityGet() {
-    const device = await this.hubController.getDevice(this.deviceUniqueId);
-    return device!.current_humidity!;
+    try {
+      const device = await this.hubController.getDevice(this.deviceUniqueId);
+      return device!.current_humidity!;
+    } catch (e: any) {
+      this.platform.log.error(e.message);
+      this.platform.log.debug(e.stack);
+
+      return e;
+    }
   }
 
   async handleCurrentTemperatureGet() {
-    const device = await this.hubController.getDevice(this.deviceUniqueId);
-    return device!.current_temp!;
+    try {
+      const device = await this.hubController.getDevice(this.deviceUniqueId);
+      return device!.current_temp!;
+    } catch (e: any) {
+      this.platform.log.error(e.message);
+      this.platform.log.debug(e.stack);
+
+      return e;
+    }
   }
 
   async handleStatusLowBatteryGet() {
-    const device = await this.hubController.getDevice(this.deviceUniqueId);
-    const currentValue = device!.at_low_battery ? this.platform.Characteristic.StatusLowBattery.BATTERY_LEVEL_LOW :
-      this.platform.Characteristic.StatusLowBattery.BATTERY_LEVEL_NORMAL;
-    return currentValue;
+    try {
+      const device = await this.hubController.getDevice(this.deviceUniqueId);
+      const currentValue = device!.at_low_battery ? this.platform.Characteristic.StatusLowBattery.BATTERY_LEVEL_LOW :
+        this.platform.Characteristic.StatusLowBattery.BATTERY_LEVEL_NORMAL;
+      return currentValue;
+    } catch (e: any) {
+      this.platform.log.error(e.message);
+      this.platform.log.debug(e.stack);
+
+      return e;
+    }
   }
 }

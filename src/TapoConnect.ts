@@ -9,6 +9,8 @@ export type DeviceKey = {
 };
 
 export class TapoConnect {
+  private readonly CONNECT_TIMEOUT = 5000;
+
   private readonly email: string;
   private readonly password: string;
   private readonly deviceIp: string;
@@ -40,6 +42,7 @@ export class TapoConnect {
       method: 'post',
       url: `http://${this.deviceIp}/app`,
       data: handshakeRequest,
+      timeout: this.CONNECT_TIMEOUT,
     });
 
     TapoConnect.checkError(response.data);
@@ -70,6 +73,7 @@ export class TapoConnect {
       headers: {
         'Cookie': this.sessionCookie,
       },
+      timeout: this.CONNECT_TIMEOUT,
     });
 
     TapoConnect.checkError(response.data);

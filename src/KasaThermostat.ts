@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { Service, PlatformAccessory } from 'homebridge';
 
 import { KasaHubPlatform } from './platform';
@@ -61,79 +62,129 @@ export class KasaThermostat {
   }
 
   async handleCurrentHeatingCoolingStateGet() {
-    const device = await this.hubController.getDevice(this.deviceUniqueId);
+    try {
+      const device = await this.hubController.getDevice(this.deviceUniqueId);
 
-    let currentValue = this.platform.Characteristic.CurrentHeatingCoolingState.OFF;
-    if (device!.sleep) {
-      currentValue = this.platform.Characteristic.CurrentHeatingCoolingState.OFF;
-    } else if (!device!.frost_protection_on) {
-      currentValue = this.platform.Characteristic.CurrentHeatingCoolingState.HEAT;
+      let currentValue = this.platform.Characteristic.CurrentHeatingCoolingState.OFF;
+      if (device!.sleep) {
+        currentValue = this.platform.Characteristic.CurrentHeatingCoolingState.OFF;
+      } else if (!device!.frost_protection_on) {
+        currentValue = this.platform.Characteristic.CurrentHeatingCoolingState.HEAT;
+      }
+
+      return currentValue;
+    } catch (e: any) {
+      this.platform.log.error(e.message);
+      this.platform.log.debug(e.stack);
+
+      return e;
     }
-
-    return currentValue;
   }
 
   async handleTargetHeatingCoolingStateSet(value) {
-    const device = await this.hubController.getDevice(this.deviceUniqueId)!;
-    this.platform.log.info('[%s] Setting target heating state to: ', device?.name, value);
+    try {
+      const device = await this.hubController.getDevice(this.deviceUniqueId)!;
+      this.platform.log.info('[%s] Setting target heating state to: ', device?.name, value);
 
-    if (device!.sleep) {
-      this.platform.log.info('[%s] Sleeping, cannot change target heating state');
-      return;
-    }
+      if (device!.sleep) {
+        this.platform.log.info('[%s] Sleeping, cannot change target heating state', device?.name);
+        return;
+      }
 
-    if (value === this.platform.Characteristic.TargetHeatingCoolingState.OFF) {
-      device!.frost_protection_on = true;
-      device!.tapoConnect.set_on(false, this.deviceUniqueId);
-    } else {
-      device!.frost_protection_on = false;
-      device!.tapoConnect.set_on(true, this.deviceUniqueId);
+      if (value === this.platform.Characteristic.TargetHeatingCoolingState.OFF) {
+        device!.frost_protection_on = true;
+        device!.tapoConnect.set_on(false, this.deviceUniqueId);
+      } else {
+        device!.frost_protection_on = false;
+        device!.tapoConnect.set_on(true, this.deviceUniqueId);
+      }
+
+    } catch (e: any) {
+      this.platform.log.error(e.message);
+      this.platform.log.debug(e.stack);
+
+      return e;
     }
   }
 
   async handleTargetHeatingCoolingStateGet() {
-    const device = await this.hubController.getDevice(this.deviceUniqueId)!;
+    try {
+      const device = await this.hubController.getDevice(this.deviceUniqueId)!;
 
-    let currentValue = this.platform.Characteristic.TargetHeatingCoolingState.OFF;
-    if (device!.sleep) {
-      currentValue = this.platform.Characteristic.TargetHeatingCoolingState.OFF;
-    } else if (!device!.frost_protection_on) {
-      currentValue = this.platform.Characteristic.TargetHeatingCoolingState.HEAT;
+      let currentValue = this.platform.Characteristic.TargetHeatingCoolingState.OFF;
+      if (device!.sleep) {
+        currentValue = this.platform.Characteristic.TargetHeatingCoolingState.OFF;
+      } else if (!device!.frost_protection_on) {
+        currentValue = this.platform.Characteristic.TargetHeatingCoolingState.HEAT;
+      }
+      return currentValue;
+    } catch (e: any) {
+      this.platform.log.error(e.message);
+      this.platform.log.debug(e.stack);
+
+      return e;
     }
-    return currentValue;
   }
 
   async handleCurrentTemperatureGet() {
-    const device = await this.hubController.getDevice(this.deviceUniqueId)!;
+    try {
+      const device = await this.hubController.getDevice(this.deviceUniqueId)!;
 
-    return device!.current_temp!;
+      return device!.current_temp!;
+    } catch (e: any) {
+      this.platform.log.error(e.message);
+      this.platform.log.debug(e.stack);
+
+      return e;
+    }
   }
 
   async handleTargetTemperatureGet() {
-    const device = await this.hubController.getDevice(this.deviceUniqueId)!;
+    try {
+      const device = await this.hubController.getDevice(this.deviceUniqueId)!;
 
-    return device!.target_temp!;
+      return device!.target_temp!;
+    } catch (e: any) {
+      this.platform.log.error(e.message);
+      this.platform.log.debug(e.stack);
+
+      return e;
+    }
   }
 
   async handleTargetTemperatureSet(value) {
-    const device = await this.hubController.getDevice(this.deviceUniqueId)!;
-    this.platform.log.info('[%s] Setting target temperature to: ', device?.name, value);
+    try {
+      const device = await this.hubController.getDevice(this.deviceUniqueId)!;
+      this.platform.log.info('[%s] Setting target temperature to: ', device?.name, value);
 
-    if (device!.sleep) {
-      this.platform.log.info('[%s] Sleeping, cannot change temperature');
-      return;
+      if (device!.sleep) {
+        this.platform.log.info('[%s] Sleeping, cannot change temperature', device?.name);
+        return;
+      }
+
+      device!.target_temp = value;
+      device!.tapoConnect.set_temp(value, this.deviceUniqueId);
+    } catch (e: any) {
+      this.platform.log.error(e.message);
+      this.platform.log.debug(e.stack);
+
+      return e;
     }
-
-    device!.target_temp = value;
-    device!.tapoConnect.set_temp(value, this.deviceUniqueId);
   }
 
   async handleTemperatureDisplayUnitsGet() {
-    const device = await this.hubController.getDevice(this.deviceUniqueId)!;
-    if (device!.temp_unit) {
-      return device!.temp_unit === 'celsius' ? this.platform.Characteristic.TemperatureDisplayUnits.CELSIUS
-        : this.platform.Characteristic.TemperatureDisplayUnits.FAHRENHEIT;
+    try {
+      const device = await this.hubController.getDevice(this.deviceUniqueId)!;
+      if (device!.temp_unit) {
+        return device!.temp_unit === 'celsius' ? this.platform.Characteristic.TemperatureDisplayUnits.CELSIUS
+          : this.platform.Characteristic.TemperatureDisplayUnits.FAHRENHEIT;
+      }
+      return this.platform.Characteristic.TemperatureDisplayUnits.CELSIUS;
+    } catch (e: any) {
+      this.platform.log.error(e.message);
+      this.platform.log.debug(e.stack);
+
+      return e;
     }
-    return this.platform.Characteristic.TemperatureDisplayUnits.CELSIUS;
   }
 }
