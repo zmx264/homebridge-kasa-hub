@@ -2,7 +2,7 @@
   "private": false,
   "displayName": "TPLink Tapo / Kasa hub",
   "name": "homebridge-kasa-hub",
-  "version": "0.4.2",
+  "version": "0.5.0",
   "description": "TPLink Tapo / Kasa hub",
   "license": "Apache-2.0",
   "repository": {
