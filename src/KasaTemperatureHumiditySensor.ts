@@ -53,6 +53,7 @@ export class KasaTemperatureHumiditySensor {
       const device = await this.hubController.getDevice(this.deviceUniqueId);
       return device!.current_humidity!;
     } catch (e: any) {
+      this.platform.log.error('Sensor: error getting humidity');
       this.platform.log.error(e.message);
       this.platform.log.debug(e.stack);
 
@@ -65,6 +66,7 @@ export class KasaTemperatureHumiditySensor {
       const device = await this.hubController.getDevice(this.deviceUniqueId);
       return device!.current_temp!;
     } catch (e: any) {
+      this.platform.log.error('Sensor: error getting temperature');
       this.platform.log.error(e.message);
       this.platform.log.debug(e.stack);
 
@@ -79,6 +81,7 @@ export class KasaTemperatureHumiditySensor {
         this.platform.Characteristic.StatusLowBattery.BATTERY_LEVEL_NORMAL;
       return currentValue;
     } catch (e: any) {
+      this.platform.log.error('Sensor: error getting battery status');
       this.platform.log.error(e.message);
       this.platform.log.debug(e.stack);
 

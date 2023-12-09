@@ -74,6 +74,7 @@ export class KasaThermostat {
 
       return currentValue;
     } catch (e: any) {
+      this.platform.log.error('Thermostat: error getting current state');
       this.platform.log.error(e.message);
       this.platform.log.debug(e.stack);
 
@@ -84,6 +85,16 @@ export class KasaThermostat {
   async handleTargetHeatingCoolingStateSet(value) {
     try {
       const device = await this.hubController.getDevice(this.deviceUniqueId)!;
+
+      let target_frost_protection_on = false;
+      if (value === this.platform.Characteristic.TargetHeatingCoolingState.OFF) {
+        target_frost_protection_on = true;
+      }
+
+      if (device!.frost_protection_on === target_frost_protection_on) {
+        return;
+      }
+
       this.platform.log.info('[%s] Setting target heating state to: ', device?.name, value);
 
       if (device!.sleep) {
@@ -91,15 +102,10 @@ export class KasaThermostat {
         return;
       }
 
-      if (value === this.platform.Characteristic.TargetHeatingCoolingState.OFF) {
-        device!.frost_protection_on = true;
-        device!.tapoConnect.set_on(false, this.deviceUniqueId);
-      } else {
-        device!.frost_protection_on = false;
-        device!.tapoConnect.set_on(true, this.deviceUniqueId);
-      }
-
+      device!.frost_protection_on = target_frost_protection_on;
+      device!.tapoConnect.set_on(!target_frost_protection_on, this.deviceUniqueId);
     } catch (e: any) {
+      this.platform.log.error('Thermostat: error setting target state');
       this.platform.log.error(e.message);
       this.platform.log.debug(e.stack);
 
@@ -119,6 +125,7 @@ export class KasaThermostat {
       }
       return currentValue;
     } catch (e: any) {
+      this.platform.log.error('Thermostat: error getting state');
       this.platform.log.error(e.message);
       this.platform.log.debug(e.stack);
 
@@ -132,6 +139,7 @@ export class KasaThermostat {
 
       return device!.current_temp!;
     } catch (e: any) {
+      this.platform.log.error('Thermostat: error getting current temperature');
       this.platform.log.error(e.message);
       this.platform.log.debug(e.stack);
 
@@ -145,6 +153,7 @@ export class KasaThermostat {
 
       return device!.target_temp!;
     } catch (e: any) {
+      this.platform.log.error('Thermostat: error getting target temperature');
       this.platform.log.error(e.message);
       this.platform.log.debug(e.stack);
 
@@ -155,6 +164,11 @@ export class KasaThermostat {
   async handleTargetTemperatureSet(value) {
     try {
       const device = await this.hubController.getDevice(this.deviceUniqueId)!;
+
+      if (device?.target_temp === value) {
+        return;
+      }
+
       this.platform.log.info('[%s] Setting target temperature to: ', device?.name, value);
 
       if (device!.sleep) {
@@ -165,6 +179,7 @@ export class KasaThermostat {
       device!.target_temp = value;
       device!.tapoConnect.set_temp(value, this.deviceUniqueId);
     } catch (e: any) {
+      this.platform.log.error('Thermostat: error setting target temperature');
       this.platform.log.error(e.message);
       this.platform.log.debug(e.stack);
 
@@ -181,6 +196,7 @@ export class KasaThermostat {
       }
       return this.platform.Characteristic.TemperatureDisplayUnits.CELSIUS;
     } catch (e: any) {
+      this.platform.log.error('Thermostat: error getting temperature display unit');
       this.platform.log.error(e.message);
       this.platform.log.debug(e.stack);
 
