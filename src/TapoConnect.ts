@@ -9,7 +9,7 @@ export type DeviceKey = {
 };
 
 export class TapoConnect {
-  private readonly CONNECT_TIMEOUT = 5000;
+  private readonly CONNECT_TIMEOUT = 20000;
 
   private readonly email: string;
   private readonly password: string;
@@ -143,35 +143,15 @@ export class TapoConnect {
     };
   }
 
-  public async set_temp(target_temp: number, device_id: string) {
-    try {
-      const cmdRequest = TapoConnect.get_control_child(device_id, {
-        'method': 'set_device_info',
-        'params': {
-          'target_temp': target_temp,
-          'temp_unit': 'celsius',
-        },
-      });
-      return await this.securePassthrough(cmdRequest);
-    } catch (e: any) {
-      this.log.error(e.message);
-      this.log.debug(e.stack);
-    }
-  }
-
-  public async set_on(on: boolean, device_id: string) {
-    try {
-      const cmdRequest = TapoConnect.get_control_child(device_id, {
-        'method': 'set_device_info',
-        'params': {
-          'frost_protection_on': !on,
-        },
-
-      });
-      return await this.securePassthrough(cmdRequest);
-    } catch (e: any) {
-      this.log.error(e.message);
-      this.log.debug(e.stack);
-    }
+  public async set_temp_on(target_temp: number, on: boolean, device_id: string) {
+    const cmdRequest = TapoConnect.get_control_child(device_id, {
+      'method': 'set_device_info',
+      'params': {
+        'frost_protection_on': !on,
+        'target_temp': target_temp,
+        'temp_unit': 'celsius',
+      },
+    });
+    return await this.securePassthrough(cmdRequest);
   }
 }

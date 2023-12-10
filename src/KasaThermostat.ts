@@ -2,14 +2,15 @@
 import { Service, PlatformAccessory } from 'homebridge';
 
 import { KasaHubPlatform } from './platform';
-import { KasaHubController } from './KasaHubController';
+import { ChildDevice, KasaHubController } from './KasaHubController';
+import { setTimeout } from 'node:timers/promises';
 
 export class KasaThermostat {
   private thermoStatService: Service;
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private deviceUniqueId: any;
   private hubController: KasaHubController;
+  private canExecute = true;
 
   constructor(
     private readonly platform: KasaHubPlatform,
@@ -82,37 +83,6 @@ export class KasaThermostat {
     }
   }
 
-  async handleTargetHeatingCoolingStateSet(value) {
-    try {
-      const device = await this.hubController.getDevice(this.deviceUniqueId)!;
-
-      let target_frost_protection_on = false;
-      if (value === this.platform.Characteristic.TargetHeatingCoolingState.OFF) {
-        target_frost_protection_on = true;
-      }
-
-      if (device!.frost_protection_on === target_frost_protection_on) {
-        return;
-      }
-
-      this.platform.log.info('[%s] Setting target heating state to: ', device?.name, value);
-
-      if (device!.sleep) {
-        this.platform.log.info('[%s] Sleeping, cannot change target heating state', device?.name);
-        return;
-      }
-
-      device!.frost_protection_on = target_frost_protection_on;
-      device!.tapoConnect.set_on(!target_frost_protection_on, this.deviceUniqueId);
-    } catch (e: any) {
-      this.platform.log.error('Thermostat: error setting target state');
-      this.platform.log.error(e.message);
-      this.platform.log.debug(e.stack);
-
-      return e;
-    }
-  }
-
   async handleTargetHeatingCoolingStateGet() {
     try {
       const device = await this.hubController.getDevice(this.deviceUniqueId)!;
@@ -161,32 +131,6 @@ export class KasaThermostat {
     }
   }
 
-  async handleTargetTemperatureSet(value) {
-    try {
-      const device = await this.hubController.getDevice(this.deviceUniqueId)!;
-
-      if (device?.target_temp === value) {
-        return;
-      }
-
-      this.platform.log.info('[%s] Setting target temperature to: ', device?.name, value);
-
-      if (device!.sleep) {
-        this.platform.log.info('[%s] Sleeping, cannot change temperature', device?.name);
-        return;
-      }
-
-      device!.target_temp = value;
-      device!.tapoConnect.set_temp(value, this.deviceUniqueId);
-    } catch (e: any) {
-      this.platform.log.error('Thermostat: error setting target temperature');
-      this.platform.log.error(e.message);
-      this.platform.log.debug(e.stack);
-
-      return e;
-    }
-  }
-
   async handleTemperatureDisplayUnitsGet() {
     try {
       const device = await this.hubController.getDevice(this.deviceUniqueId)!;
@@ -202,5 +146,73 @@ export class KasaThermostat {
 
       return e;
     }
+  }
+
+  async handleTargetTemperatureSet(value) {
+    try {
+      const device = await this.hubController.getDevice(this.deviceUniqueId)!;
+
+      this.platform.log.info('[%s] Setting target temperature to: ', device?.name, value);
+
+      if (device!.sleep) {
+        this.platform.log.info('[%s] Sleeping, cannot change temperature', device?.name);
+        return;
+      }
+
+      device!.target_temp = value;
+
+      if (this.canExecute) {
+        this.canExecute = false;
+        this.set_on_temp(device!);
+      }
+    } catch (e: any) {
+      this.platform.log.error('Thermostat: error setting target temperature');
+      this.platform.log.error(e.message);
+      this.platform.log.debug(e.stack);
+
+      return e;
+    }
+  }
+
+  async handleTargetHeatingCoolingStateSet(value) {
+    try {
+      const device = await this.hubController.getDevice(this.deviceUniqueId)!;
+
+      let target_frost_protection_on = false;
+      if (value === this.platform.Characteristic.TargetHeatingCoolingState.OFF) {
+        target_frost_protection_on = true;
+      }
+
+      this.platform.log.info('[%s] Setting target heating state to: ', device?.name, value);
+
+      if (device!.sleep) {
+        this.platform.log.info('[%s] Sleeping, cannot change target heating state', device?.name);
+        return;
+      }
+
+      device!.frost_protection_on = target_frost_protection_on;
+
+      if (this.canExecute) {
+        this.canExecute = false;
+        this.set_on_temp(device!);
+      }
+    } catch (e: any) {
+      this.platform.log.error('Thermostat: error setting target state');
+      this.platform.log.error(e.message);
+      this.platform.log.debug(e.stack);
+
+      return e;
+    }
+  }
+
+  async set_on_temp(device: ChildDevice) {
+    setTimeout(2500).then(() => {
+      this.canExecute = true;
+      device.tapoConnect.set_temp_on(device.target_temp!, !device.frost_protection_on, this.deviceUniqueId)
+        .catch(e => {
+          this.platform.log.error('[%s] Error setting: %s', device.name, e.message);
+          this.platform.log.debug(e.stack);
+        });
+    });
   }
 }
