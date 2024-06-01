@@ -1,7 +1,9 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import axios from 'axios';
-import { base64Encode, decrypt, encrypt, generateKeyPair, readDeviceKey, shaDigest } from './TapoCipher';
+// eslint-disable-next-line max-len
+import { base64Encode, decrypt, decryptKlap, encode, encrypt, encryptAndSign, generateKeyPair, readDeviceKey, sha256, shaDigest } from './TapoCipher';
 import { Logger } from 'homebridge';
+import { createHash, randomBytes } from 'crypto';
 
 export type DeviceKey = {
   key?: Buffer;
@@ -18,6 +20,9 @@ export class TapoConnect {
 
   private sessionCookie: string | undefined;
   private deviceKey: DeviceKey = {};
+  private seq?: Buffer;
+  private sig?: Buffer;
+  private usePassThroughProtocol = true;
 
   private token: string | undefined;
 
@@ -28,7 +33,7 @@ export class TapoConnect {
     this.deviceIp = deviceIp;
   }
 
-  private async handshake() {
+  private async handshakePassThrough() {
     const keyPair = await generateKeyPair();
 
     const handshakeRequest =
@@ -55,6 +60,87 @@ export class TapoConnect {
     const deviceKey = readDeviceKey(response.data.result.key, keyPair.privateKey);
     this.deviceKey.key = deviceKey.subarray(0, 16);
     this.deviceKey.iv = deviceKey.subarray(16, 32);
+  }
+
+  private async handshakeAndLoginKlap() {
+    // handshake1
+    const localSeed = randomBytes(16);
+
+    const response = await axios.post(`http://${this.deviceIp}/app/handshake1`, localSeed,
+      {
+        responseType: 'arraybuffer',
+        withCredentials: true,
+      }).catch((error) => {
+        if (error.response.status === 404) {
+          throw new Error('Klap protocol not supported');
+        }
+        throw new Error(`handshake1 failed: ${error}`);
+      });
+
+    const responseBytes = Buffer.from(response.data);
+
+    const setCookieHeader = response.headers['set-cookie']![0];
+    this.sessionCookie = setCookieHeader.substring(0, setCookieHeader.indexOf(';'));
+
+    const remoteSeed = responseBytes.slice(0, 16);
+    const serverHash = responseBytes.slice(16);
+
+    const localAuthHash = sha256(Buffer.concat([sha1(this.email), sha1(this.password)]));
+    const localSeedAuthHash = sha256(Buffer.concat([localSeed, remoteSeed, localAuthHash]));
+
+    if (!compare(localSeedAuthHash, serverHash)) {
+      throw new Error('email or password incorrect');
+    }
+
+    // handshake2
+    const payload = sha256(Buffer.concat([remoteSeed, localSeed, localAuthHash]));
+    await axios.post(`http://${this.deviceIp}/app/handshake2`, payload,
+      {
+        responseType: 'arraybuffer',
+        headers: {
+          'Cookie': this.sessionCookie,
+        },
+      })
+      .catch((error) => {
+        throw new Error(`handshake2 failed: ${error}`);
+      });
+
+    this.deviceKey.key = deriveKey(localSeed, remoteSeed, localAuthHash);
+    this.deviceKey.iv = deriveIv(localSeed, remoteSeed, localAuthHash);
+
+    this.sig = deriveSig(localSeed, remoteSeed, localAuthHash);
+    this.seq = deriveSeqFromIv(this.deviceKey.iv);
+  }
+
+  private async sendKlap(deviceRequest: any): Promise<any> {
+    this.seq = incrementSeq(this.seq!);
+
+    const encryptedRequest = encryptAndSign(deviceRequest, this.deviceKey, this.sig!, this.seq);
+
+    const response = await axios({
+      method: 'post',
+      url: `http://${this.deviceIp}/app/request`,
+      data: encryptedRequest,
+      responseType: 'arraybuffer',
+      headers: {
+        'Cookie': this.sessionCookie,
+      },
+      params: {
+        seq: this.seq.readInt32BE(),
+      },
+    });
+
+    const decryptedResponse = decryptKlap(response.data, this.deviceKey, this.seq!);
+    TapoConnect.checkError(decryptedResponse);
+
+    return decryptedResponse.result;
+  }
+
+  private async send(deviceRequest: any): Promise<any> {
+    if (this.usePassThroughProtocol) {
+      return this.securePassthrough(deviceRequest);
+    }
+    return this.sendKlap(deviceRequest);
   }
 
   private async securePassthrough(deviceRequest: any): Promise<any> {
@@ -85,9 +171,20 @@ export class TapoConnect {
   }
 
   public async login() {
-    await this.handshake();
-    const loginDeviceRequest =
-    {
+    try {
+      await this.handshakePassThrough();
+      await this.loginPassThrough();
+      this.usePassThroughProtocol = true;
+    } catch (error) {
+      this.usePassThroughProtocol = false;
+    }
+    if (!this.usePassThroughProtocol) {
+      await this.handshakeAndLoginKlap();
+    }
+  }
+
+  private async loginPassThrough() {
+    const loginDeviceRequest = {
       'method': 'login_device',
       'params': {
         'username': base64Encode(shaDigest(this.email)),
@@ -99,6 +196,7 @@ export class TapoConnect {
     const loginDeviceResponse = await this.securePassthrough(loginDeviceRequest);
     this.token = loginDeviceResponse.token;
   }
+
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private static checkError(responseData: any) {
@@ -123,7 +221,7 @@ export class TapoConnect {
     const getChildDeviceListRequest = {
       'method': 'get_child_device_list',
     };
-    return await this.securePassthrough(getChildDeviceListRequest);
+    return await this.send(getChildDeviceListRequest);
   }
 
   static get_control_child(device_id: string, request: unknown) {
@@ -152,6 +250,28 @@ export class TapoConnect {
         'temp_unit': 'celsius',
       },
     });
-    return await this.securePassthrough(cmdRequest);
+    return await this.send(cmdRequest);
   }
 }
+
+const compare = (b1: Buffer, b2: Buffer) => b1.compare(b2) === 0;
+
+const deriveSeqFromIv = (iv: Buffer) => iv.slice(iv.length - 4);
+
+const deriveSig = (localSeed: Buffer, remoteSeed: Buffer, userHash: Buffer) =>
+  sha256(Buffer.concat([encode('ldk'), localSeed, remoteSeed, userHash])).slice(0, 28);
+
+const deriveKey = (localSeed: Buffer, remoteSeed: Buffer, userHash: Buffer) =>
+  sha256(Buffer.concat([encode('lsk'), localSeed, remoteSeed, userHash])).slice(0, 16);
+
+const deriveIv = (localSeed: Buffer, remoteSeed: Buffer, userHash: Buffer) =>
+  sha256(Buffer.concat([encode('iv'), localSeed, remoteSeed, userHash]));
+
+const incrementSeq = (seq: Buffer) => {
+  const buffer = Buffer.alloc(4);
+  buffer.writeInt32BE(seq.readInt32BE() + 1);
+  return buffer;
+};
+
+const sha1 = (data: string | Buffer) =>
+  createHash('sha1').update(data).digest();
