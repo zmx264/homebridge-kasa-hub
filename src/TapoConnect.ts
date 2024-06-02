@@ -70,6 +70,7 @@ export class TapoConnect {
       {
         responseType: 'arraybuffer',
         withCredentials: true,
+        timeout: this.CONNECT_TIMEOUT,
       })
       .catch((error) => {
         if (error.response.status === 404) {
@@ -83,8 +84,8 @@ export class TapoConnect {
     const setCookieHeader = response.headers['set-cookie']![0];
     this.sessionCookie = setCookieHeader.substring(0, setCookieHeader.indexOf(';'));
 
-    const remoteSeed = responseBytes.slice(0, 16);
-    const serverHash = responseBytes.slice(16);
+    const remoteSeed = responseBytes.subarray(0, 16);
+    const serverHash = responseBytes.subarray(16);
 
     const localAuthHash = sha256(Buffer.concat([sha1(this.email), sha1(this.password)]));
     const localSeedAuthHash = sha256(Buffer.concat([localSeed, remoteSeed, localAuthHash]));
@@ -101,6 +102,7 @@ export class TapoConnect {
         headers: {
           'Cookie': this.sessionCookie,
         },
+        timeout: this.CONNECT_TIMEOUT,
       })
       .catch((error) => {
         throw new Error(`handshake2 failed: ${error}`);
@@ -123,6 +125,7 @@ export class TapoConnect {
       url: `http://${this.deviceIp}/app/request`,
       data: encryptedRequest,
       responseType: 'arraybuffer',
+      timeout: this.CONNECT_TIMEOUT,
       headers: {
         'Cookie': this.sessionCookie,
       },
@@ -139,12 +142,12 @@ export class TapoConnect {
 
   private async send(deviceRequest: any): Promise<any> {
     if (this.usePassThroughProtocol) {
-      return this.securePassthrough(deviceRequest);
+      return this.sendPassthrough(deviceRequest);
     }
     return this.sendKlap(deviceRequest);
   }
 
-  private async securePassthrough(deviceRequest: any): Promise<any> {
+  private async sendPassthrough(deviceRequest: any): Promise<any> {
     const encryptedRequest = encrypt(deviceRequest, this.deviceKey);
     const securePassthroughRequest = {
       'method': 'securePassthrough',
@@ -194,7 +197,7 @@ export class TapoConnect {
       'requestTimeMils': 0,
     };
 
-    const loginDeviceResponse = await this.securePassthrough(loginDeviceRequest);
+    const loginDeviceResponse = await this.sendPassthrough(loginDeviceRequest);
     this.token = loginDeviceResponse.token;
   }
 
@@ -257,13 +260,13 @@ export class TapoConnect {
 
 const compare = (b1: Buffer, b2: Buffer) => b1.compare(b2) === 0;
 
-const deriveSeqFromIv = (iv: Buffer) => iv.slice(iv.length - 4);
+const deriveSeqFromIv = (iv: Buffer) => iv.subarray(iv.length - 4);
 
 const deriveSig = (localSeed: Buffer, remoteSeed: Buffer, userHash: Buffer) =>
-  sha256(Buffer.concat([encode('ldk'), localSeed, remoteSeed, userHash])).slice(0, 28);
+  sha256(Buffer.concat([encode('ldk'), localSeed, remoteSeed, userHash])).subarray(0, 28);
 
 const deriveKey = (localSeed: Buffer, remoteSeed: Buffer, userHash: Buffer) =>
-  sha256(Buffer.concat([encode('lsk'), localSeed, remoteSeed, userHash])).slice(0, 16);
+  sha256(Buffer.concat([encode('lsk'), localSeed, remoteSeed, userHash])).subarray(0, 16);
 
 const deriveIv = (localSeed: Buffer, remoteSeed: Buffer, userHash: Buffer) =>
   sha256(Buffer.concat([encode('iv'), localSeed, remoteSeed, userHash]));

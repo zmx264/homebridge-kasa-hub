@@ -58,7 +58,7 @@ export const decrypt = (data: string, deviceKey: DeviceKey): any => {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const decryptKlap = (payload: Buffer, deviceKey: DeviceKey, seq: Buffer): any => {
   const cipher = createDecipheriv(AES_CIPHER_ALGORITHM, deviceKey.key!, ivWithSeq(deviceKey.iv!, seq));
-  const ciphertext = cipher.update(payload.slice(32));
+  const ciphertext = cipher.update(payload.subarray(32));
   return JSON.parse(Buffer.concat([ciphertext, cipher.final()]).toString());
 };
 
@@ -93,4 +93,4 @@ export const sha256 = (data: string | Buffer) =>
 export const encode = (text: string) => Buffer.from(text, 'utf-8');
 
 const ivWithSeq = (iv: Buffer, seq: Buffer) =>
-  Buffer.concat([iv.slice(0, 12), seq]);
+  Buffer.concat([iv.subarray(0, 12), seq]);
