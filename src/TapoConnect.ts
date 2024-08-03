@@ -221,9 +221,12 @@ export class TapoConnect {
     }
   }
 
-  public async get_child_device_list() {
+  public async get_child_device_list(startIndex = 0) {
     const getChildDeviceListRequest = {
       'method': 'get_child_device_list',
+      'params': {
+        'start_index': startIndex,
+      },
     };
     return await this.send(getChildDeviceListRequest);
   }

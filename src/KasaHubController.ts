@@ -82,53 +82,68 @@ export class KasaHubController {
       try {
         const tapoConnect = new TapoConnect(this.log, email, password, hub);
         await tapoConnect.login();
-        const devices = await tapoConnect.get_child_device_list();
+        let index = 0;
+        let totalDevices: number | null = null;
 
-        for (const device of devices.child_device_list) {
-          if (device.status !== 'online') {
-            continue;
+        do {
+          this.log.debug('Getting start index:', index);
+          const devices = await tapoConnect.get_child_device_list(index);
+          deviceList.concat(KasaHubController.parseDevices(devices, tapoConnect));
+          if (totalDevices === null) {
+            totalDevices = devices.sum;
+            this.log.debug('Total devices:', totalDevices);
           }
-          let deviceType: ChildDeviceType | null = null;
-          switch (device.category) {
-            case 'subg.trigger.temp-hmdt-sensor':
-              deviceType = ChildDeviceType.TemperatureHumiditySensor;
-              break;
-            case 'subg.trv':
-              deviceType = ChildDeviceType.Thermostat;
-              break;
-          }
-          if (deviceType === null) {
-            continue;
-          }
-          try {
-            const wrapper: ChildDevice = {
-              tapoConnect: tapoConnect,
-              name: device.nickname ? Buffer.from(device.nickname, 'base64').toString() : 'empty',
-              uniqueId: device.device_id,
-              model: device.model,
-              firmware: device.fw_ver,
-              deviceType: deviceType,
-              current_temp: device.current_temp,
-              current_humidity: device.current_humidity,
-              sleep: device.trv_states ? device.trv_states.length > 0 && device.trv_states.every(state => state === 'shutdown') : false,
-              target_temp: device.target_temp,
-              temp_unit: device.temp_unit,
-              frost_protection_on: device.frost_protection_on,
-              min_control_temp: device.min_control_temp,
-              max_control_temp: device.max_control_temp,
-              at_low_battery: device.at_low_battery,
-            };
-            deviceList.push(wrapper);
-          } catch (e: any) {
-            this.log.error(e.message);
-            this.log.debug(e.stack);
-          }
-        }
+          index += 10;
+        } while (index < (totalDevices ?? 0));
       } catch (e: any) {
         this.log.error(e.message);
         this.log.debug(e.stack);
       }
+    }
+    return deviceList;
+  }
 
+  private static parseDevices(devices: any, tapoConnect: TapoConnect): Array<ChildDevice> {
+    const deviceList: Array<ChildDevice> = [];
+    for (const device of devices.child_device_list) {
+      if (device.status !== 'online') {
+        continue;
+      }
+      let deviceType: ChildDeviceType | null = null;
+      switch (device.category) {
+        case 'subg.trigger.temp-hmdt-sensor':
+          deviceType = ChildDeviceType.TemperatureHumiditySensor;
+          break;
+        case 'subg.trv':
+          deviceType = ChildDeviceType.Thermostat;
+          break;
+      }
+      if (deviceType === null) {
+        continue;
+      }
+      try {
+        const wrapper: ChildDevice = {
+          tapoConnect: tapoConnect,
+          name: device.nickname ? Buffer.from(device.nickname, 'base64').toString() : 'empty',
+          uniqueId: device.device_id,
+          model: device.model,
+          firmware: device.fw_ver,
+          deviceType: deviceType,
+          current_temp: device.current_temp,
+          current_humidity: device.current_humidity,
+          sleep: device.trv_states ? device.trv_states.length > 0 && device.trv_states.every(state => state === 'shutdown') : false,
+          target_temp: device.target_temp,
+          temp_unit: device.temp_unit,
+          frost_protection_on: device.frost_protection_on,
+          min_control_temp: device.min_control_temp,
+          max_control_temp: device.max_control_temp,
+          at_low_battery: device.at_low_battery,
+        };
+        deviceList.push(wrapper);
+      } catch (e: any) {
+        this.log.error(e.message);
+        this.log.debug(e.stack);
+      }
     }
     return deviceList;
   }
