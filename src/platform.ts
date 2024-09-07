@@ -45,6 +45,10 @@ export class KasaHubPlatform implements DynamicPlatformPlugin {
     const devices = await KasaHubController.getHubDevices(this.config.email, this.config.password, this.config.devices);
 
     for (const device of devices) {
+      if (this.config.ignore_sensor && device.deviceType === ChildDeviceType.TemperatureHumiditySensor) {
+        continue;
+      }
+
       const uuid = this.api.hap.uuid.generate(device.uniqueId);
 
       const existingAccessory = this.accessories.find(accessory => accessory.UUID === uuid);

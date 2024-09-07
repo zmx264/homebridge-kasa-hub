@@ -17,6 +17,13 @@
         "required": true,
         "description": "TPLink Tapo / Kasa account password"
       },
+      "ignore_sensor": {
+        "title": "Ignore sensors",
+        "type": "boolean",
+        "default": false,
+        "required": false,
+        "description": "Ignore temperature / humidity sensors"
+      },
       "devices": {
         "title": "Hubs",
         "required": true,

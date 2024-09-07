@@ -13,7 +13,7 @@
     "url": "https://github.com/zmx264/homebridge-kasa-hub/issues"
   },
   "engines": {
-    "node": "^18.17.0 || ^20.9.0",
+    "node": "^18.20.4 || ^20.16.0 || ^22.5.1",
     "homebridge": "^1.6.0"
   },
   "main": "dist/index.js",
