@@ -9,7 +9,7 @@ export class KasaTemperatureHumiditySensor {
   private humidityService: Service;
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private deviceUniqueId: any;
+  private deviceUniqueId: string;
   private hubController: KasaHubController;
 
 
@@ -51,41 +51,47 @@ export class KasaTemperatureHumiditySensor {
   async handleCurrentRelativeHumidityGet() {
     try {
       const device = await this.hubController.getDevice(this.deviceUniqueId);
-      return device!.current_humidity!;
+      if (!device || device.current_humidity === undefined) {
+        throw new this.platform.api.hap.HapStatusError(this.platform.api.hap.HAPStatus.SERVICE_COMMUNICATION_FAILURE);
+      }
+      return device.current_humidity;
     } catch (e: any) {
       this.platform.log.error('Sensor: error getting humidity');
       this.platform.log.error(e.message);
       this.platform.log.debug(e.stack);
-
-      return e;
+      throw new this.platform.api.hap.HapStatusError(this.platform.api.hap.HAPStatus.SERVICE_COMMUNICATION_FAILURE);
     }
   }
 
   async handleCurrentTemperatureGet() {
     try {
       const device = await this.hubController.getDevice(this.deviceUniqueId);
-      return device!.current_temp!;
+      if (!device || device.current_temp === undefined) {
+        throw new this.platform.api.hap.HapStatusError(this.platform.api.hap.HAPStatus.SERVICE_COMMUNICATION_FAILURE);
+      }
+      return device.current_temp;
     } catch (e: any) {
       this.platform.log.error('Sensor: error getting temperature');
       this.platform.log.error(e.message);
       this.platform.log.debug(e.stack);
-
-      return e;
+      throw new this.platform.api.hap.HapStatusError(this.platform.api.hap.HAPStatus.SERVICE_COMMUNICATION_FAILURE);
     }
   }
 
   async handleStatusLowBatteryGet() {
     try {
       const device = await this.hubController.getDevice(this.deviceUniqueId);
-      const currentValue = device!.at_low_battery ? this.platform.Characteristic.StatusLowBattery.BATTERY_LEVEL_LOW :
+      if (!device || device.at_low_battery === undefined) {
+        throw new this.platform.api.hap.HapStatusError(this.platform.api.hap.HAPStatus.SERVICE_COMMUNICATION_FAILURE);
+      }
+      const currentValue = device.at_low_battery ? this.platform.Characteristic.StatusLowBattery.BATTERY_LEVEL_LOW :
         this.platform.Characteristic.StatusLowBattery.BATTERY_LEVEL_NORMAL;
       return currentValue;
     } catch (e: any) {
       this.platform.log.error('Sensor: error getting battery status');
       this.platform.log.error(e.message);
       this.platform.log.debug(e.stack);
-
-      return e;
+      throw new this.platform.api.hap.HapStatusError(this.platform.api.hap.HAPStatus.SERVICE_COMMUNICATION_FAILURE);
     }
   }
 }

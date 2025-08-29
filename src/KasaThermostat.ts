@@ -1,14 +1,14 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { Service, PlatformAccessory } from 'homebridge';
+import { Service, PlatformAccessory, CharacteristicValue } from 'homebridge';
 
 import { KasaHubPlatform } from './platform';
 import { ChildDevice, KasaHubController } from './KasaHubController';
 import { setTimeout } from 'node:timers/promises';
 
 export class KasaThermostat {
-  private thermoStatService: Service;
+  private thermostatService: Service;
 
-  private deviceUniqueId: any;
+  private deviceUniqueId: string;
   private hubController: KasaHubController;
   private canExecute = true;
 
@@ -27,36 +27,36 @@ export class KasaThermostat {
       .setCharacteristic(this.platform.Characteristic.FirmwareRevision, device!.firmware)
       .setCharacteristic(this.platform.Characteristic.SerialNumber, device!.uniqueId);
 
-    this.thermoStatService = this.accessory.getService(this.platform.Service.Thermostat) ||
+    this.thermostatService = this.accessory.getService(this.platform.Service.Thermostat) ||
       this.accessory.addService(this.platform.Service.Thermostat);
 
-    this.thermoStatService.getCharacteristic(this.platform.Characteristic.CurrentHeatingCoolingState)
+    this.thermostatService.getCharacteristic(this.platform.Characteristic.CurrentHeatingCoolingState)
       .onGet(this.handleCurrentHeatingCoolingStateGet.bind(this));
 
-    this.thermoStatService.getCharacteristic(this.platform.Characteristic.TargetHeatingCoolingState)
+    this.thermostatService.getCharacteristic(this.platform.Characteristic.TargetHeatingCoolingState)
       .onGet(this.handleTargetHeatingCoolingStateGet.bind(this))
       .onSet(this.handleTargetHeatingCoolingStateSet.bind(this));
-    if (Number(this.thermoStatService.getCharacteristic(this.platform.Characteristic.TargetHeatingCoolingState).value) > 1) {
-      this.thermoStatService.getCharacteristic(this.platform.Characteristic.TargetHeatingCoolingState).updateValue(1);
+    if (Number(this.thermostatService.getCharacteristic(this.platform.Characteristic.TargetHeatingCoolingState).value) > 1) {
+      this.thermostatService.getCharacteristic(this.platform.Characteristic.TargetHeatingCoolingState).updateValue(1);
     }
-    this.thermoStatService.getCharacteristic(this.platform.Characteristic.TargetHeatingCoolingState).setProps({
+    this.thermostatService.getCharacteristic(this.platform.Characteristic.TargetHeatingCoolingState).setProps({
       maxValue: 1,
       validValues: [0, 1],
     });
 
-    this.thermoStatService.getCharacteristic(this.platform.Characteristic.CurrentTemperature)
+    this.thermostatService.getCharacteristic(this.platform.Characteristic.CurrentTemperature)
       .onGet(this.handleCurrentTemperatureGet.bind(this));
 
-    this.thermoStatService.getCharacteristic(this.platform.Characteristic.TargetTemperature)
+    this.thermostatService.getCharacteristic(this.platform.Characteristic.TargetTemperature)
       .onGet(this.handleTargetTemperatureGet.bind(this))
       .onSet(this.handleTargetTemperatureSet.bind(this));
-    this.thermoStatService.getCharacteristic(this.platform.Characteristic.TargetTemperature).setProps({
+    this.thermostatService.getCharacteristic(this.platform.Characteristic.TargetTemperature).setProps({
       minValue: device!.min_control_temp,
       maxValue: device!.max_control_temp,
       minStep: 1,
     });
 
-    this.thermoStatService.getCharacteristic(this.platform.Characteristic.TemperatureDisplayUnits)
+    this.thermostatService.getCharacteristic(this.platform.Characteristic.TemperatureDisplayUnits)
       .onGet(this.handleTemperatureDisplayUnitsGet.bind(this));
 
     this.accessory.context.tempDevice = undefined;
@@ -65,11 +65,13 @@ export class KasaThermostat {
   async handleCurrentHeatingCoolingStateGet() {
     try {
       const device = await this.hubController.getDevice(this.deviceUniqueId);
-
+      if (!device) {
+        throw new this.platform.api.hap.HapStatusError(this.platform.api.hap.HAPStatus.SERVICE_COMMUNICATION_FAILURE);
+      }
       let currentValue = this.platform.Characteristic.CurrentHeatingCoolingState.OFF;
-      if (device!.sleep) {
+      if (device.sleep) {
         currentValue = this.platform.Characteristic.CurrentHeatingCoolingState.OFF;
-      } else if (!device!.frost_protection_on) {
+      } else if (!device.frost_protection_on) {
         currentValue = this.platform.Characteristic.CurrentHeatingCoolingState.HEAT;
       }
 
@@ -78,19 +80,21 @@ export class KasaThermostat {
       this.platform.log.error('Thermostat: error getting current state');
       this.platform.log.error(e.message);
       this.platform.log.debug(e.stack);
-
-      return e;
+      throw new this.platform.api.hap.HapStatusError(this.platform.api.hap.HAPStatus.SERVICE_COMMUNICATION_FAILURE);
     }
   }
 
   async handleTargetHeatingCoolingStateGet() {
     try {
-      const device = await this.hubController.getDevice(this.deviceUniqueId)!;
+      const device = await this.hubController.getDevice(this.deviceUniqueId);
+      if (!device) {
+        throw new this.platform.api.hap.HapStatusError(this.platform.api.hap.HAPStatus.SERVICE_COMMUNICATION_FAILURE);
+      }
 
       let currentValue = this.platform.Characteristic.TargetHeatingCoolingState.OFF;
-      if (device!.sleep) {
+      if (device.sleep) {
         currentValue = this.platform.Characteristic.TargetHeatingCoolingState.OFF;
-      } else if (!device!.frost_protection_on) {
+      } else if (!device.frost_protection_on) {
         currentValue = this.platform.Characteristic.TargetHeatingCoolingState.HEAT;
       }
       return currentValue;
@@ -98,44 +102,48 @@ export class KasaThermostat {
       this.platform.log.error('Thermostat: error getting state');
       this.platform.log.error(e.message);
       this.platform.log.debug(e.stack);
-
-      return e;
+      throw new this.platform.api.hap.HapStatusError(this.platform.api.hap.HAPStatus.SERVICE_COMMUNICATION_FAILURE);
     }
   }
 
   async handleCurrentTemperatureGet() {
     try {
-      const device = await this.hubController.getDevice(this.deviceUniqueId)!;
-
-      return device!.current_temp!;
+      const device = await this.hubController.getDevice(this.deviceUniqueId);
+      if (!device || device.current_temp === undefined) {
+        throw new this.platform.api.hap.HapStatusError(this.platform.api.hap.HAPStatus.SERVICE_COMMUNICATION_FAILURE);
+      }
+      return device.current_temp;
     } catch (e: any) {
       this.platform.log.error('Thermostat: error getting current temperature');
       this.platform.log.error(e.message);
       this.platform.log.debug(e.stack);
-
-      return e;
+      throw new this.platform.api.hap.HapStatusError(this.platform.api.hap.HAPStatus.SERVICE_COMMUNICATION_FAILURE);
     }
   }
 
   async handleTargetTemperatureGet() {
     try {
-      const device = await this.hubController.getDevice(this.deviceUniqueId)!;
-
-      return device!.target_temp!;
+      const device = await this.hubController.getDevice(this.deviceUniqueId);
+      if (!device || device.target_temp === undefined) {
+        throw new this.platform.api.hap.HapStatusError(this.platform.api.hap.HAPStatus.SERVICE_COMMUNICATION_FAILURE);
+      }
+      return device.target_temp;
     } catch (e: any) {
       this.platform.log.error('Thermostat: error getting target temperature');
       this.platform.log.error(e.message);
       this.platform.log.debug(e.stack);
-
-      return e;
+      throw new this.platform.api.hap.HapStatusError(this.platform.api.hap.HAPStatus.SERVICE_COMMUNICATION_FAILURE);
     }
   }
 
   async handleTemperatureDisplayUnitsGet() {
     try {
-      const device = await this.hubController.getDevice(this.deviceUniqueId)!;
-      if (device!.temp_unit) {
-        return device!.temp_unit === 'celsius' ? this.platform.Characteristic.TemperatureDisplayUnits.CELSIUS
+      const device = await this.hubController.getDevice(this.deviceUniqueId);
+      if (!device) {
+        throw new this.platform.api.hap.HapStatusError(this.platform.api.hap.HAPStatus.SERVICE_COMMUNICATION_FAILURE);
+      }
+      if (device.temp_unit) {
+        return device.temp_unit === 'celsius' ? this.platform.Characteristic.TemperatureDisplayUnits.CELSIUS
           : this.platform.Characteristic.TemperatureDisplayUnits.FAHRENHEIT;
       }
       return this.platform.Characteristic.TemperatureDisplayUnits.CELSIUS;
@@ -143,65 +151,70 @@ export class KasaThermostat {
       this.platform.log.error('Thermostat: error getting temperature display unit');
       this.platform.log.error(e.message);
       this.platform.log.debug(e.stack);
-
-      return e;
+      throw new this.platform.api.hap.HapStatusError(this.platform.api.hap.HAPStatus.SERVICE_COMMUNICATION_FAILURE);
     }
   }
 
-  async handleTargetTemperatureSet(value) {
+  async handleTargetTemperatureSet(value: CharacteristicValue) {
     try {
-      const device = await this.hubController.getDevice(this.deviceUniqueId)!;
+      const device = await this.hubController.getDevice(this.deviceUniqueId);
+      if (!device) {
+        throw new this.platform.api.hap.HapStatusError(this.platform.api.hap.HAPStatus.SERVICE_COMMUNICATION_FAILURE);
+      }
 
-      this.platform.log.info('[%s] Setting target temperature to: ', device?.name, value);
+      const target = Number(value);
+      this.platform.log.info('[%s] Setting target temperature to: ', device?.name, target);
 
-      if (device!.sleep) {
+      if (device.sleep) {
         this.platform.log.info('[%s] Sleeping, cannot change temperature', device?.name);
         return;
       }
 
-      device!.target_temp = value;
+      device.target_temp = target;
 
       if (this.canExecute) {
         this.canExecute = false;
-        this.set_on_temp(device!);
+        this.set_on_temp(device);
       }
     } catch (e: any) {
       this.platform.log.error('Thermostat: error setting target temperature');
       this.platform.log.error(e.message);
       this.platform.log.debug(e.stack);
-
-      return e;
+      throw new this.platform.api.hap.HapStatusError(this.platform.api.hap.HAPStatus.SERVICE_COMMUNICATION_FAILURE);
     }
   }
 
-  async handleTargetHeatingCoolingStateSet(value) {
+  async handleTargetHeatingCoolingStateSet(value: CharacteristicValue) {
     try {
-      const device = await this.hubController.getDevice(this.deviceUniqueId)!;
+      const device = await this.hubController.getDevice(this.deviceUniqueId);
+      if (!device) {
+        throw new this.platform.api.hap.HapStatusError(this.platform.api.hap.HAPStatus.SERVICE_COMMUNICATION_FAILURE);
+      }
 
+      const state = Number(value);
       let target_frost_protection_on = false;
-      if (value === this.platform.Characteristic.TargetHeatingCoolingState.OFF) {
+      if (state === this.platform.Characteristic.TargetHeatingCoolingState.OFF) {
         target_frost_protection_on = true;
       }
 
-      this.platform.log.info('[%s] Setting target heating state to: ', device?.name, value);
+      this.platform.log.info('[%s] Setting target heating state to: ', device?.name, state);
 
-      if (device!.sleep) {
+      if (device.sleep) {
         this.platform.log.info('[%s] Sleeping, cannot change target heating state', device?.name);
         return;
       }
 
-      device!.frost_protection_on = target_frost_protection_on;
+      device.frost_protection_on = target_frost_protection_on;
 
       if (this.canExecute) {
         this.canExecute = false;
-        this.set_on_temp(device!);
+        this.set_on_temp(device);
       }
     } catch (e: any) {
       this.platform.log.error('Thermostat: error setting target state');
       this.platform.log.error(e.message);
       this.platform.log.debug(e.stack);
-
-      return e;
+      throw new this.platform.api.hap.HapStatusError(this.platform.api.hap.HAPStatus.SERVICE_COMMUNICATION_FAILURE);
     }
   }
 

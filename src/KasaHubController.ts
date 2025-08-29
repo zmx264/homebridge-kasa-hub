@@ -73,9 +73,9 @@ export class KasaHubController {
   }
 
   static async getHubDevices(email: string, password: string, hubs: string[]): Promise<Array<ChildDevice>> {
-    const deviceList: Set<ChildDevice> = new Set();
+    const deviceMap: Map<string, ChildDevice> = new Map();
     if (hubs.length === 0) {
-      return Array.from(deviceList);
+      return Array.from(deviceMap.values());
     }
 
     for (const hub of hubs) {
@@ -88,7 +88,9 @@ export class KasaHubController {
         do {
           this.log.debug('Getting start index:', index);
           const devices = await tapoConnect.get_child_device_list(index);
-          KasaHubController.parseDevices(devices, tapoConnect).forEach(d => deviceList.add(d));
+          for (const d of KasaHubController.parseDevices(devices, tapoConnect)) {
+            deviceMap.set(d.uniqueId, d);
+          }
 
           if (totalDevices === null) {
             totalDevices = devices.sum;
@@ -101,12 +103,12 @@ export class KasaHubController {
         this.log.debug(e.stack);
       }
     }
-    return Array.from(deviceList);
+    return Array.from(deviceMap.values());
   }
 
   private static parseDevices(devices: any, tapoConnect: TapoConnect): Array<ChildDevice> {
     const deviceList: Array<ChildDevice> = [];
-    for (const device of devices.child_device_list) {
+    for (const device of devices.child_device_list ?? []) {
       if (device.status !== 'online') {
         continue;
       }
