@@ -38,6 +38,14 @@
           "format": "ipv4",
           "minLength": 1
         }
+      },
+      "poll_interval": {
+        "title": "Polling interval (seconds)",
+        "type": "integer",
+        "default": 60,
+        "minimum": 5,
+        "required": false,
+        "description": "How often to poll devices for state updates. Lower values increase responsiveness but also network load."
       }
     }
   }

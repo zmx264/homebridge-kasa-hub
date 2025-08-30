@@ -1,9 +1,21 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import axios from 'axios';
 // eslint-disable-next-line max-len
-import { base64Encode, decrypt, decryptKlap, encode, encrypt, encryptAndSign, generateKeyPair, readDeviceKey, sha256, shaDigest } from './TapoCipher';
+import { base64Encode, decrypt, decryptKlap, encode, encrypt, encryptAndSign, generateKeyPair, readDeviceKey, shaDigest, sha256 as sha256Hash } from './TapoCipher';
 import { Logger } from 'homebridge';
 import { createHash, randomBytes } from 'crypto';
+
+// Local helper to avoid TS Buffer/Uint8Array generic mismatches for concat
+function concatBuf(...parts: Buffer[]): Buffer {
+  const total = parts.reduce((s, p) => s + p.length, 0);
+  const out = Buffer.allocUnsafe(total);
+  let o = 0;
+  for (const p of parts) {
+    out.set(p, o);
+    o += p.length;
+  }
+  return out;
+}
 
 export type DeviceKey = {
   key?: Buffer;
@@ -87,15 +99,15 @@ export class TapoConnect {
     const remoteSeed = responseBytes.subarray(0, 16);
     const serverHash = responseBytes.subarray(16);
 
-    const localAuthHash = sha256(Buffer.concat([sha1(this.email), sha1(this.password)]));
-    const localSeedAuthHash = sha256(Buffer.concat([localSeed, remoteSeed, localAuthHash]));
+    const localAuthHash = sha256Hash(concatBuf(sha1(this.email), sha1(this.password)));
+    const localSeedAuthHash = sha256Hash(concatBuf(localSeed, remoteSeed, localAuthHash));
 
     if (!compare(localSeedAuthHash, serverHash)) {
       throw new Error('email or password incorrect');
     }
 
     // handshake2
-    const payload = sha256(Buffer.concat([remoteSeed, localSeed, localAuthHash]));
+    const payload = sha256Hash(concatBuf(remoteSeed, localSeed, localAuthHash));
     await axios.post(`http://${this.deviceIp}/app/handshake2`, payload,
       {
         responseType: 'arraybuffer',
@@ -231,6 +243,18 @@ export class TapoConnect {
     return await this.send(getChildDeviceListRequest);
   }
 
+  // Retrieve last trigger logs for a child device (used by contact sensors)
+  public async get_child_trigger_logs(device_id: string) {
+    const req = TapoConnect.get_control_child(device_id, {
+      'method': 'get_trigger_logs',
+      'params': {
+        'start_id': 0,
+        'page_size': 1,
+      },
+    });
+    return await this.send(req);
+  }
+
   static get_control_child(device_id: string, request: unknown) {
     return {
       'method': 'control_child',
@@ -261,18 +285,28 @@ export class TapoConnect {
   }
 }
 
-const compare = (b1: Buffer, b2: Buffer) => b1.compare(b2) === 0;
+const compare = (b1: Buffer, b2: Buffer) => {
+  if (b1.length !== b2.length) {
+    return false;
+  }
+  for (let i = 0; i < b1.length; i++) {
+    if (b1[i] !== b2[i]) {
+      return false;
+    }
+  }
+  return true;
+};
 
 const deriveSeqFromIv = (iv: Buffer) => iv.subarray(iv.length - 4);
 
 const deriveSig = (localSeed: Buffer, remoteSeed: Buffer, userHash: Buffer) =>
-  sha256(Buffer.concat([encode('ldk'), localSeed, remoteSeed, userHash])).subarray(0, 28);
+  sha256Hash(concatBuf(encode('ldk'), localSeed, remoteSeed, userHash)).subarray(0, 28);
 
 const deriveKey = (localSeed: Buffer, remoteSeed: Buffer, userHash: Buffer) =>
-  sha256(Buffer.concat([encode('lsk'), localSeed, remoteSeed, userHash])).subarray(0, 16);
+  sha256Hash(concatBuf(encode('lsk'), localSeed, remoteSeed, userHash)).subarray(0, 16);
 
 const deriveIv = (localSeed: Buffer, remoteSeed: Buffer, userHash: Buffer) =>
-  sha256(Buffer.concat([encode('iv'), localSeed, remoteSeed, userHash]));
+  sha256Hash(concatBuf(encode('iv'), localSeed, remoteSeed, userHash));
 
 const incrementSeq = (seq: Buffer) => {
   const buffer = Buffer.alloc(4);
@@ -280,5 +314,12 @@ const incrementSeq = (seq: Buffer) => {
   return buffer;
 };
 
-const sha1 = (data: string | Buffer) =>
-  createHash('sha1').update(data).digest();
+const sha1 = (data: string | Buffer) => {
+  const h = createHash('sha1');
+  if (typeof data === 'string') {
+    h.update(data, 'utf8');
+  } else {
+    h.update(data as unknown as NodeJS.ArrayBufferView);
+  }
+  return h.digest();
+};

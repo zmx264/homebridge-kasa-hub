@@ -19,10 +19,13 @@ export type ChildDevice = {
   min_control_temp?: number;
   max_control_temp?: number;
   at_low_battery?: boolean;
+  // Contact sensor specific
+  contact_open?: boolean;
 };
 export enum ChildDeviceType {
   TemperatureHumiditySensor,
-  Thermostat
+  Thermostat,
+  ContactSensor,
 }
 
 export class KasaHubController {
@@ -120,8 +123,21 @@ export class KasaHubController {
         case 'subg.trv':
           deviceType = ChildDeviceType.Thermostat;
           break;
+        // Common categories seen for Tapo T110 Door/Window sensors
+        case 'subg.trigger.open-close-sensor':
+        case 'subg.open-close-sensor':
+        case 'subg.trigger.contact-sensor':
+        case 'subg.contact-sensor':
+          deviceType = ChildDeviceType.ContactSensor;
+          break;
       }
       if (deviceType === null) {
+        try {
+          const nickname = device.nickname ? Buffer.from(device.nickname, 'base64').toString() : 'empty';
+          this.log.debug(`Skipping unsupported device ${device.device_id} (${nickname}) category=${device.category}`);
+        } catch {
+          // ignore logging decode issues
+        }
         continue;
       }
       try {
@@ -141,6 +157,33 @@ export class KasaHubController {
           min_control_temp: device.min_control_temp,
           max_control_temp: device.max_control_temp,
           at_low_battery: device.at_low_battery,
+          contact_open: (() => {
+            // Heuristic mapping for contact sensors
+            const v = device;
+            // common fields that may exist
+            if (typeof v.open === 'boolean') {
+              return v.open;
+            }
+            if (typeof v.is_open === 'boolean') {
+              return v.is_open;
+            }
+            if (typeof v.opened === 'boolean') {
+              return v.opened;
+            }
+            if (typeof v.open_state === 'number') {
+              return v.open_state === 1;
+            }
+            if (typeof v.open_state === 'string') {
+              return v.open_state.toLowerCase() === 'open';
+            }
+            if (typeof v.contact_state === 'string') {
+              return v.contact_state.toLowerCase() === 'open';
+            }
+            if (typeof v.state === 'string') {
+              return v.state.toLowerCase() === 'open';
+            }
+            return undefined;
+          })(),
         };
         deviceList.push(wrapper);
       } catch (e: any) {

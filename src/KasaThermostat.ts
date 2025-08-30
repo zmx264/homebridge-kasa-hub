@@ -3,7 +3,7 @@ import { Service, PlatformAccessory, CharacteristicValue } from 'homebridge';
 
 import { KasaHubPlatform } from './platform';
 import { ChildDevice, KasaHubController } from './KasaHubController';
-import { setTimeout } from 'node:timers/promises';
+import { setTimeout as delay } from 'node:timers/promises';
 
 export class KasaThermostat {
   private thermostatService: Service;
@@ -11,6 +11,7 @@ export class KasaThermostat {
   private deviceUniqueId: string;
   private hubController: KasaHubController;
   private canExecute = true;
+  private pollTimer?: NodeJS.Timeout;
 
   constructor(
     private readonly platform: KasaHubPlatform,
@@ -60,6 +61,11 @@ export class KasaThermostat {
       .onGet(this.handleTemperatureDisplayUnitsGet.bind(this));
 
     this.accessory.context.tempDevice = undefined;
+
+    // Start periodic polling to keep state fresh in HomeKit
+    this.startPolling();
+    // Clean up on shutdown
+    this.platform.api.on('shutdown', () => this.stopPolling());
   }
 
   async handleCurrentHeatingCoolingStateGet() {
@@ -219,7 +225,7 @@ export class KasaThermostat {
   }
 
   async set_on_temp(device: ChildDevice) {
-    setTimeout(2500).then(() => {
+    delay(2500).then(() => {
       this.canExecute = true;
       device.tapoConnect.set_temp_on(device.target_temp!, !device.frost_protection_on, this.deviceUniqueId)
         .catch(e => {
@@ -227,5 +233,66 @@ export class KasaThermostat {
           this.platform.log.debug(e.stack);
         });
     });
+  }
+
+  private startPolling() {
+    const interval = this.platform.pollIntervalMs;
+    if (this.pollTimer) {
+      clearInterval(this.pollTimer);
+    }
+    // First run soon after start
+    setTimeout(() => {
+      this.pollOnce().catch(() => { /* already logged */ });
+    }, 2000);
+    this.pollTimer = setInterval(() => {
+      this.pollOnce().catch(() => { /* already logged */ });
+    }, interval);
+  }
+
+  private stopPolling() {
+    if (this.pollTimer) {
+      clearInterval(this.pollTimer);
+      this.pollTimer = undefined;
+    }
+  }
+
+  private async pollOnce() {
+    try {
+      const device = await this.hubController.getDevice(this.deviceUniqueId);
+      if (!device) {
+        return;
+      }
+      // Current + Target temperature
+      if (device.current_temp !== undefined) {
+        this.thermostatService.updateCharacteristic(
+          this.platform.Characteristic.CurrentTemperature,
+          device.current_temp,
+        );
+      }
+      if (device.target_temp !== undefined) {
+        this.thermostatService.updateCharacteristic(
+          this.platform.Characteristic.TargetTemperature,
+          device.target_temp,
+        );
+      }
+      // Heating/cooling state derived from frost/sleep
+      let currentHeating = this.platform.Characteristic.CurrentHeatingCoolingState.OFF;
+      let targetHeating = this.platform.Characteristic.TargetHeatingCoolingState.OFF;
+      if (!device.sleep && !device.frost_protection_on) {
+        currentHeating = this.platform.Characteristic.CurrentHeatingCoolingState.HEAT;
+        targetHeating = this.platform.Characteristic.TargetHeatingCoolingState.HEAT;
+      }
+      this.thermostatService.updateCharacteristic(
+        this.platform.Characteristic.CurrentHeatingCoolingState,
+        currentHeating,
+      );
+      this.thermostatService.updateCharacteristic(
+        this.platform.Characteristic.TargetHeatingCoolingState,
+        targetHeating,
+      );
+    } catch (err) {
+      const msg = (err as Error)?.message ?? String(err);
+      this.platform.log.debug(`Thermostat(${this.accessory.context.deviceUniqueId}) poll failed: ${msg}`);
+    }
   }
 }
