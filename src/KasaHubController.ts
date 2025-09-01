@@ -21,11 +21,17 @@ export type ChildDevice = {
   at_low_battery?: boolean;
   // Contact sensor specific
   contact_open?: boolean;
+  // Leak sensor specific
+  leak_detected?: boolean;
+  // Motion sensor specific
+  motion_detected?: boolean;
 };
 export enum ChildDeviceType {
   TemperatureHumiditySensor,
   Thermostat,
   ContactSensor,
+  LeakSensor,
+  MotionSensor,
 }
 
 export class KasaHubController {
@@ -116,6 +122,7 @@ export class KasaHubController {
         continue;
       }
       let deviceType: ChildDeviceType | null = null;
+      this.log.debug(`Found device ${device.device_id} category=${device.category}`);
       switch (device.category) {
         case 'subg.trigger.temp-hmdt-sensor':
           deviceType = ChildDeviceType.TemperatureHumiditySensor;
@@ -123,12 +130,14 @@ export class KasaHubController {
         case 'subg.trv':
           deviceType = ChildDeviceType.Thermostat;
           break;
-        // Common categories seen for Tapo T110 Door/Window sensors
-        case 'subg.trigger.open-close-sensor':
-        case 'subg.open-close-sensor':
         case 'subg.trigger.contact-sensor':
-        case 'subg.contact-sensor':
           deviceType = ChildDeviceType.ContactSensor;
+          break;
+        case 'subg.trigger.water-leak-sensor':
+          deviceType = ChildDeviceType.LeakSensor;
+          break;
+        case 'subg.trigger.motion-sensor':
+          deviceType = ChildDeviceType.MotionSensor;
           break;
       }
       if (deviceType === null) {
@@ -157,33 +166,17 @@ export class KasaHubController {
           min_control_temp: device.min_control_temp,
           max_control_temp: device.max_control_temp,
           at_low_battery: device.at_low_battery,
-          contact_open: (() => {
-            // Heuristic mapping for contact sensors
-            const v = device;
-            // common fields that may exist
-            if (typeof v.open === 'boolean') {
-              return v.open;
+          contact_open: (typeof device.open === 'boolean') ? device.open : undefined,
+          leak_detected: (() => {
+            if (typeof device.water_leak_status === 'string') {
+              return String(device.water_leak_status).toLowerCase() === 'water_leak';
             }
-            if (typeof v.is_open === 'boolean') {
-              return v.is_open;
-            }
-            if (typeof v.opened === 'boolean') {
-              return v.opened;
-            }
-            if (typeof v.open_state === 'number') {
-              return v.open_state === 1;
-            }
-            if (typeof v.open_state === 'string') {
-              return v.open_state.toLowerCase() === 'open';
-            }
-            if (typeof v.contact_state === 'string') {
-              return v.contact_state.toLowerCase() === 'open';
-            }
-            if (typeof v.state === 'string') {
-              return v.state.toLowerCase() === 'open';
+            if (typeof device.in_alarm === 'boolean') {
+              return device.in_alarm;
             }
             return undefined;
           })(),
+          motion_detected: (typeof device.detected === 'boolean') ? device.detected : undefined,
         };
         deviceList.push(wrapper);
       } catch (e: any) {

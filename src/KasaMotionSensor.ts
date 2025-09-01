@@ -2,7 +2,7 @@ import { Service, PlatformAccessory, CharacteristicValue } from 'homebridge';
 import { KasaHubPlatform } from './platform';
 import { ChildDevice, ChildDeviceType, KasaHubController } from './KasaHubController';
 
-export class KasaContactSensor {
+export class KasaMotionSensor {
   private service: Service;
   private pollTimer?: NodeJS.Timeout;
 
@@ -14,23 +14,22 @@ export class KasaContactSensor {
 
     this.accessory.getService(Service.AccessoryInformation)!
       .setCharacteristic(Characteristic.Manufacturer, 'TP-Link')
-      .setCharacteristic(Characteristic.Model, 'Tapo Contact Sensor')
+      .setCharacteristic(Characteristic.Model, 'Tapo Motion Sensor')
       .setCharacteristic(Characteristic.SerialNumber, accessory.context.deviceUniqueId ?? 'unknown');
 
-    this.service = this.accessory.getService(Service.ContactSensor) ||
-      this.accessory.addService(Service.ContactSensor);
+    this.service = this.accessory.getService(Service.MotionSensor) ||
+      this.accessory.addService(Service.MotionSensor);
 
     this.service.setCharacteristic(Characteristic.Name, accessory.displayName);
 
-    this.service.getCharacteristic(Characteristic.ContactSensorState)
-      .onGet(this.handleContactStateGet.bind(this));
+    this.service.getCharacteristic(Characteristic.MotionDetected)
+      .onGet(this.handleMotionDetectedGet.bind(this));
 
     this.service.getCharacteristic(Characteristic.StatusLowBattery)
       .onGet(this.handleStatusLowBatteryGet.bind(this));
 
-    // Start periodic polling to keep state fresh in HomeKit
+    // Poll periodically similar to other sensors
     this.startPolling();
-    // Clean up on shutdown
     this.platform.api.on('shutdown', () => this.stopPolling());
   }
 
@@ -44,17 +43,12 @@ export class KasaContactSensor {
     return d;
   }
 
-  async handleContactStateGet(): Promise<CharacteristicValue> {
-    const { Characteristic } = this.platform;
+  async handleMotionDetectedGet(): Promise<CharacteristicValue> {
     const d = await this.loadDevice();
-    if (d.deviceType !== ChildDeviceType.ContactSensor) {
+    if (d.deviceType !== ChildDeviceType.MotionSensor) {
       throw new this.platform.api.hap.HapStatusError(this.platform.api.hap.HAPStatus.SERVICE_COMMUNICATION_FAILURE);
     }
-    const isOpen = await this.getContactOpen(d);
-    const val = (isOpen ?? false)
-      ? Characteristic.ContactSensorState.CONTACT_NOT_DETECTED
-      : Characteristic.ContactSensorState.CONTACT_DETECTED;
-    return val;
+    return d.motion_detected === true;
   }
 
   async handleStatusLowBatteryGet(): Promise<CharacteristicValue> {
@@ -64,37 +58,11 @@ export class KasaContactSensor {
     return low ? Characteristic.StatusLowBattery.BATTERY_LEVEL_LOW : Characteristic.StatusLowBattery.BATTERY_LEVEL_NORMAL;
   }
 
-  private async getContactOpen(d?: ChildDevice): Promise<boolean | undefined> {
-    const device = d ?? await this.loadDevice();
-    let isOpen = device.contact_open;
-    // Fallback: if state not populated in list payload, fetch last trigger log
-    if (isOpen === undefined) {
-      try {
-        const resp = await device.tapoConnect.get_child_trigger_logs(device.uniqueId);
-        const last = resp?.responses?.[0]?.result?.logs?.[0];
-        const evt: string | undefined = last?.event;
-        if (evt) {
-          const e = String(evt).toLowerCase();
-          if (e === 'open') {
-            isOpen = true;
-          } else if (e === 'close') {
-            isOpen = false;
-          }
-        }
-      } catch (err) {
-        const msg = (err as Error)?.message ?? String(err);
-        this.platform.log.debug(`ContactSensor(${device.uniqueId}) trigger logs fetch failed: ${msg}`);
-      }
-    }
-    return isOpen;
-  }
-
   private startPolling() {
     const interval = this.platform.pollIntervalMs;
     if (this.pollTimer) {
       clearInterval(this.pollTimer);
     }
-    // First run soon after start
     setTimeout(() => {
       this.pollOnce().catch(() => { /* already logged */ });
     }, 2000);
@@ -114,14 +82,10 @@ export class KasaContactSensor {
     try {
       const { Characteristic } = this.platform;
       const d = await this.loadDevice();
-      if (d.deviceType !== ChildDeviceType.ContactSensor) {
+      if (d.deviceType !== ChildDeviceType.MotionSensor) {
         return;
       }
-      const isOpen = await this.getContactOpen(d);
-      const val = (isOpen ?? false)
-        ? Characteristic.ContactSensorState.CONTACT_NOT_DETECTED
-        : Characteristic.ContactSensorState.CONTACT_DETECTED;
-      this.service.updateCharacteristic(Characteristic.ContactSensorState, val);
+      this.service.updateCharacteristic(Characteristic.MotionDetected, d.motion_detected === true);
       const low = d.at_low_battery === true;
       this.service.updateCharacteristic(
         Characteristic.StatusLowBattery,
@@ -129,7 +93,7 @@ export class KasaContactSensor {
       );
     } catch (err) {
       const msg = (err as Error)?.message ?? String(err);
-      this.platform.log.debug(`ContactSensor(${this.accessory.context.deviceUniqueId}) poll failed: ${msg}`);
+      this.platform.log.debug(`MotionSensor(${this.accessory.context.deviceUniqueId}) poll failed: ${msg}`);
     }
   }
 }

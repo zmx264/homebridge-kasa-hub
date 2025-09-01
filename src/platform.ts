@@ -5,6 +5,8 @@ import { KasaTemperatureHumiditySensor } from './KasaTemperatureHumiditySensor';
 import { KasaHubController, ChildDeviceType } from './KasaHubController';
 import { KasaThermostat } from './KasaThermostat';
 import { KasaContactSensor } from './KasaContactSensor';
+import { KasaLeakSensor } from './KasaLeakSensor';
+import { KasaMotionSensor } from './KasaMotionSensor';
 
 export class KasaHubPlatform implements DynamicPlatformPlugin {
   public readonly Service: typeof Service = this.api.hap.Service;
@@ -78,6 +80,12 @@ export class KasaHubPlatform implements DynamicPlatformPlugin {
           case ChildDeviceType.ContactSensor:
             new KasaContactSensor(this, existingAccessory);
             break;
+          case ChildDeviceType.LeakSensor:
+            new KasaLeakSensor(this, existingAccessory);
+            break;
+          case ChildDeviceType.MotionSensor:
+            new KasaMotionSensor(this, existingAccessory);
+            break;
         }
       } else {
         this.log.info('Adding new accessory:', device.name);
@@ -96,6 +104,12 @@ export class KasaHubPlatform implements DynamicPlatformPlugin {
             break;
           case ChildDeviceType.ContactSensor:
             new KasaContactSensor(this, accessory);
+            break;
+          case ChildDeviceType.LeakSensor:
+            new KasaLeakSensor(this, accessory);
+            break;
+          case ChildDeviceType.MotionSensor:
+            new KasaMotionSensor(this, accessory);
             break;
         }
 

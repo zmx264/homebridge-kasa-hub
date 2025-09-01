@@ -2,7 +2,7 @@ import { Service, PlatformAccessory, CharacteristicValue } from 'homebridge';
 import { KasaHubPlatform } from './platform';
 import { ChildDevice, ChildDeviceType, KasaHubController } from './KasaHubController';
 
-export class KasaContactSensor {
+export class KasaLeakSensor {
   private service: Service;
   private pollTimer?: NodeJS.Timeout;
 
@@ -14,23 +14,22 @@ export class KasaContactSensor {
 
     this.accessory.getService(Service.AccessoryInformation)!
       .setCharacteristic(Characteristic.Manufacturer, 'TP-Link')
-      .setCharacteristic(Characteristic.Model, 'Tapo Contact Sensor')
+      .setCharacteristic(Characteristic.Model, 'Tapo Leak Sensor')
       .setCharacteristic(Characteristic.SerialNumber, accessory.context.deviceUniqueId ?? 'unknown');
 
-    this.service = this.accessory.getService(Service.ContactSensor) ||
-      this.accessory.addService(Service.ContactSensor);
+    this.service = this.accessory.getService(Service.LeakSensor) ||
+      this.accessory.addService(Service.LeakSensor);
 
     this.service.setCharacteristic(Characteristic.Name, accessory.displayName);
 
-    this.service.getCharacteristic(Characteristic.ContactSensorState)
-      .onGet(this.handleContactStateGet.bind(this));
+    this.service.getCharacteristic(Characteristic.LeakDetected)
+      .onGet(this.handleLeakDetectedGet.bind(this));
 
     this.service.getCharacteristic(Characteristic.StatusLowBattery)
       .onGet(this.handleStatusLowBatteryGet.bind(this));
 
-    // Start periodic polling to keep state fresh in HomeKit
+    // Poll periodically
     this.startPolling();
-    // Clean up on shutdown
     this.platform.api.on('shutdown', () => this.stopPolling());
   }
 
@@ -44,17 +43,16 @@ export class KasaContactSensor {
     return d;
   }
 
-  async handleContactStateGet(): Promise<CharacteristicValue> {
+  async handleLeakDetectedGet(): Promise<CharacteristicValue> {
     const { Characteristic } = this.platform;
     const d = await this.loadDevice();
-    if (d.deviceType !== ChildDeviceType.ContactSensor) {
+    if (d.deviceType !== ChildDeviceType.LeakSensor) {
       throw new this.platform.api.hap.HapStatusError(this.platform.api.hap.HAPStatus.SERVICE_COMMUNICATION_FAILURE);
     }
-    const isOpen = await this.getContactOpen(d);
-    const val = (isOpen ?? false)
-      ? Characteristic.ContactSensorState.CONTACT_NOT_DETECTED
-      : Characteristic.ContactSensorState.CONTACT_DETECTED;
-    return val;
+    const hasLeak = await this.getLeakState(d);
+    return (hasLeak ?? false)
+      ? Characteristic.LeakDetected.LEAK_DETECTED
+      : Characteristic.LeakDetected.LEAK_NOT_DETECTED;
   }
 
   async handleStatusLowBatteryGet(): Promise<CharacteristicValue> {
@@ -64,29 +62,29 @@ export class KasaContactSensor {
     return low ? Characteristic.StatusLowBattery.BATTERY_LEVEL_LOW : Characteristic.StatusLowBattery.BATTERY_LEVEL_NORMAL;
   }
 
-  private async getContactOpen(d?: ChildDevice): Promise<boolean | undefined> {
+  private async getLeakState(d?: ChildDevice): Promise<boolean | undefined> {
     const device = d ?? await this.loadDevice();
-    let isOpen = device.contact_open;
-    // Fallback: if state not populated in list payload, fetch last trigger log
-    if (isOpen === undefined) {
+    let hasLeak = device.leak_detected;
+    if (hasLeak === undefined) {
       try {
+        // Attempt to use trigger logs similar to contact sensor
         const resp = await device.tapoConnect.get_child_trigger_logs(device.uniqueId);
         const last = resp?.responses?.[0]?.result?.logs?.[0];
         const evt: string | undefined = last?.event;
         if (evt) {
           const e = String(evt).toLowerCase();
-          if (e === 'open') {
-            isOpen = true;
-          } else if (e === 'close') {
-            isOpen = false;
+          if (e === 'water_leak') {
+            hasLeak = true;
+          } else if (e === 'water_dry' || e === 'normal') {
+            hasLeak = false;
           }
         }
       } catch (err) {
         const msg = (err as Error)?.message ?? String(err);
-        this.platform.log.debug(`ContactSensor(${device.uniqueId}) trigger logs fetch failed: ${msg}`);
+        this.platform.log.debug(`LeakSensor(${device.uniqueId}) trigger logs fetch failed: ${msg}`);
       }
     }
-    return isOpen;
+    return hasLeak;
   }
 
   private startPolling() {
@@ -94,7 +92,6 @@ export class KasaContactSensor {
     if (this.pollTimer) {
       clearInterval(this.pollTimer);
     }
-    // First run soon after start
     setTimeout(() => {
       this.pollOnce().catch(() => { /* already logged */ });
     }, 2000);
@@ -114,14 +111,14 @@ export class KasaContactSensor {
     try {
       const { Characteristic } = this.platform;
       const d = await this.loadDevice();
-      if (d.deviceType !== ChildDeviceType.ContactSensor) {
+      if (d.deviceType !== ChildDeviceType.LeakSensor) {
         return;
       }
-      const isOpen = await this.getContactOpen(d);
-      const val = (isOpen ?? false)
-        ? Characteristic.ContactSensorState.CONTACT_NOT_DETECTED
-        : Characteristic.ContactSensorState.CONTACT_DETECTED;
-      this.service.updateCharacteristic(Characteristic.ContactSensorState, val);
+      const hasLeak = await this.getLeakState(d);
+      this.service.updateCharacteristic(
+        Characteristic.LeakDetected,
+        (hasLeak ?? false) ? Characteristic.LeakDetected.LEAK_DETECTED : Characteristic.LeakDetected.LEAK_NOT_DETECTED,
+      );
       const low = d.at_low_battery === true;
       this.service.updateCharacteristic(
         Characteristic.StatusLowBattery,
@@ -129,7 +126,7 @@ export class KasaContactSensor {
       );
     } catch (err) {
       const msg = (err as Error)?.message ?? String(err);
-      this.platform.log.debug(`ContactSensor(${this.accessory.context.deviceUniqueId}) poll failed: ${msg}`);
+      this.platform.log.debug(`LeakSensor(${this.accessory.context.deviceUniqueId}) poll failed: ${msg}`);
     }
   }
 }
