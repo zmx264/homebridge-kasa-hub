@@ -19,10 +19,19 @@ export type ChildDevice = {
   min_control_temp?: number;
   max_control_temp?: number;
   at_low_battery?: boolean;
+  // Contact sensor specific
+  contact_open?: boolean;
+  // Leak sensor specific
+  leak_detected?: boolean;
+  // Motion sensor specific
+  motion_detected?: boolean;
 };
 export enum ChildDeviceType {
   TemperatureHumiditySensor,
-  Thermostat
+  Thermostat,
+  ContactSensor,
+  LeakSensor,
+  MotionSensor,
 }
 
 export class KasaHubController {
@@ -73,9 +82,9 @@ export class KasaHubController {
   }
 
   static async getHubDevices(email: string, password: string, hubs: string[]): Promise<Array<ChildDevice>> {
-    const deviceList: Set<ChildDevice> = new Set();
+    const deviceMap: Map<string, ChildDevice> = new Map();
     if (hubs.length === 0) {
-      return Array.from(deviceList);
+      return Array.from(deviceMap.values());
     }
 
     for (const hub of hubs) {
@@ -88,7 +97,9 @@ export class KasaHubController {
         do {
           this.log.debug('Getting start index:', index);
           const devices = await tapoConnect.get_child_device_list(index);
-          KasaHubController.parseDevices(devices, tapoConnect).forEach(d => deviceList.add(d));
+          for (const d of KasaHubController.parseDevices(devices, tapoConnect)) {
+            deviceMap.set(d.uniqueId, d);
+          }
 
           if (totalDevices === null) {
             totalDevices = devices.sum;
@@ -101,16 +112,17 @@ export class KasaHubController {
         this.log.debug(e.stack);
       }
     }
-    return Array.from(deviceList);
+    return Array.from(deviceMap.values());
   }
 
   private static parseDevices(devices: any, tapoConnect: TapoConnect): Array<ChildDevice> {
     const deviceList: Array<ChildDevice> = [];
-    for (const device of devices.child_device_list) {
+    for (const device of devices.child_device_list ?? []) {
       if (device.status !== 'online') {
         continue;
       }
       let deviceType: ChildDeviceType | null = null;
+      this.log.debug(`Found device ${device.device_id} category=${device.category}`);
       switch (device.category) {
         case 'subg.trigger.temp-hmdt-sensor':
           deviceType = ChildDeviceType.TemperatureHumiditySensor;
@@ -118,8 +130,23 @@ export class KasaHubController {
         case 'subg.trv':
           deviceType = ChildDeviceType.Thermostat;
           break;
+        case 'subg.trigger.contact-sensor':
+          deviceType = ChildDeviceType.ContactSensor;
+          break;
+        case 'subg.trigger.water-leak-sensor':
+          deviceType = ChildDeviceType.LeakSensor;
+          break;
+        case 'subg.trigger.motion-sensor':
+          deviceType = ChildDeviceType.MotionSensor;
+          break;
       }
       if (deviceType === null) {
+        try {
+          const nickname = device.nickname ? Buffer.from(device.nickname, 'base64').toString() : 'empty';
+          this.log.debug(`Skipping unsupported device ${device.device_id} (${nickname}) category=${device.category}`);
+        } catch {
+          // ignore logging decode issues
+        }
         continue;
       }
       try {
@@ -139,6 +166,17 @@ export class KasaHubController {
           min_control_temp: device.min_control_temp,
           max_control_temp: device.max_control_temp,
           at_low_battery: device.at_low_battery,
+          contact_open: (typeof device.open === 'boolean') ? device.open : undefined,
+          leak_detected: (() => {
+            if (typeof device.water_leak_status === 'string') {
+              return String(device.water_leak_status).toLowerCase() === 'water_leak';
+            }
+            if (typeof device.in_alarm === 'boolean') {
+              return device.in_alarm;
+            }
+            return undefined;
+          })(),
+          motion_detected: (typeof device.detected === 'boolean') ? device.detected : undefined,
         };
         deviceList.push(wrapper);
       } catch (e: any) {
