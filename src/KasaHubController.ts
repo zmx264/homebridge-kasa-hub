@@ -83,7 +83,7 @@ export class KasaHubController {
 
   static async getHubDevices(email: string, password: string, hubs: string[]): Promise<Array<ChildDevice>> {
     const deviceMap: Map<string, ChildDevice> = new Map();
-    if (hubs.length === 0) {
+    if (!hubs || hubs.length === 0) {
       return Array.from(deviceMap.values());
     }
 

@@ -85,7 +85,7 @@ export class TapoConnect {
         timeout: this.CONNECT_TIMEOUT,
       })
       .catch((error) => {
-        if (error.response.status === 404) {
+        if (error.response && error.response.status === 404) {
           throw new Error('Klap protocol not supported');
         }
         throw new Error(`handshake1 failed: ${error}`);

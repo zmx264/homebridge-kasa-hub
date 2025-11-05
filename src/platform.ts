@@ -34,7 +34,7 @@ export class KasaHubPlatform implements DynamicPlatformPlugin {
     const boundedSeconds = Math.max(5, Math.min(3600, rawInterval));
     this.pollIntervalMs = boundedSeconds * 1000;
 
-    this.hubController = new KasaHubController(this.config.email, this.config.password, this.config.devices);
+    this.hubController = new KasaHubController(this.config.email, this.config.password, this.config.devices || []);
 
     this.api.on('didFinishLaunching', () => {
       log.debug('Executed didFinishLaunching callback');
@@ -51,7 +51,7 @@ export class KasaHubPlatform implements DynamicPlatformPlugin {
   }
 
   async discoverDevices() {
-    const devices = await KasaHubController.getHubDevices(this.config.email, this.config.password, this.config.devices);
+    const devices = await KasaHubController.getHubDevices(this.config.email, this.config.password, this.config.devices || []);
 
     for (const device of devices) {
       if (this.config.ignore_sensor && device.deviceType === ChildDeviceType.TemperatureHumiditySensor) {
