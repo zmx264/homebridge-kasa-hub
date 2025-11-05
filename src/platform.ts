@@ -4,6 +4,9 @@ import { PLATFORM_NAME, PLUGIN_NAME } from './settings';
 import { KasaTemperatureHumiditySensor } from './KasaTemperatureHumiditySensor';
 import { KasaHubController, ChildDeviceType } from './KasaHubController';
 import { KasaThermostat } from './KasaThermostat';
+import { KasaContactSensor } from './KasaContactSensor';
+import { KasaLeakSensor } from './KasaLeakSensor';
+import { KasaMotionSensor } from './KasaMotionSensor';
 
 export class KasaHubPlatform implements DynamicPlatformPlugin {
   public readonly Service: typeof Service = this.api.hap.Service;
@@ -12,6 +15,7 @@ export class KasaHubPlatform implements DynamicPlatformPlugin {
   public readonly accessories: PlatformAccessory[] = [];
 
   private hubController!: KasaHubController;
+  public readonly pollIntervalMs: number = 60_000;
 
   constructor(
     public readonly log: Logger,
@@ -24,6 +28,11 @@ export class KasaHubPlatform implements DynamicPlatformPlugin {
       this.log.error('Email and password must be configured, exiting');
       return;
     }
+
+    const defaultSeconds = 60;
+    const rawInterval = typeof this.config.poll_interval === 'number' ? this.config.poll_interval : defaultSeconds;
+    const boundedSeconds = Math.max(5, Math.min(3600, rawInterval));
+    this.pollIntervalMs = boundedSeconds * 1000;
 
     this.hubController = new KasaHubController(this.config.email, this.config.password, this.config.devices);
 
@@ -68,6 +77,15 @@ export class KasaHubPlatform implements DynamicPlatformPlugin {
           case ChildDeviceType.Thermostat:
             new KasaThermostat(this, existingAccessory);
             break;
+          case ChildDeviceType.ContactSensor:
+            new KasaContactSensor(this, existingAccessory);
+            break;
+          case ChildDeviceType.LeakSensor:
+            new KasaLeakSensor(this, existingAccessory);
+            break;
+          case ChildDeviceType.MotionSensor:
+            new KasaMotionSensor(this, existingAccessory);
+            break;
         }
       } else {
         this.log.info('Adding new accessory:', device.name);
@@ -83,6 +101,15 @@ export class KasaHubPlatform implements DynamicPlatformPlugin {
             break;
           case ChildDeviceType.Thermostat:
             new KasaThermostat(this, accessory);
+            break;
+          case ChildDeviceType.ContactSensor:
+            new KasaContactSensor(this, accessory);
+            break;
+          case ChildDeviceType.LeakSensor:
+            new KasaLeakSensor(this, accessory);
+            break;
+          case ChildDeviceType.MotionSensor:
+            new KasaMotionSensor(this, accessory);
             break;
         }
 

@@ -7,9 +7,10 @@ import { KasaHubController } from './KasaHubController';
 export class KasaTemperatureHumiditySensor {
   private temperatureService: Service;
   private humidityService: Service;
+  private pollTimer?: NodeJS.Timeout;
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private deviceUniqueId: any;
+  private deviceUniqueId: string;
   private hubController: KasaHubController;
 
 
@@ -46,46 +47,109 @@ export class KasaTemperatureHumiditySensor {
       this.platform.Characteristic.StatusLowBattery.BATTERY_LEVEL_NORMAL);
     this.humidityService.getCharacteristic(this.platform.Characteristic.StatusLowBattery)
       .onGet(this.handleStatusLowBatteryGet.bind(this));
+
+    // Start periodic polling to keep state fresh in HomeKit
+    this.startPolling();
+    // Clean up on shutdown
+    this.platform.api.on('shutdown', () => this.stopPolling());
   }
 
   async handleCurrentRelativeHumidityGet() {
     try {
       const device = await this.hubController.getDevice(this.deviceUniqueId);
-      return device!.current_humidity!;
+      if (!device || device.current_humidity === undefined) {
+        throw new this.platform.api.hap.HapStatusError(this.platform.api.hap.HAPStatus.SERVICE_COMMUNICATION_FAILURE);
+      }
+      return device.current_humidity;
     } catch (e: any) {
       this.platform.log.error('Sensor: error getting humidity');
       this.platform.log.error(e.message);
       this.platform.log.debug(e.stack);
-
-      return e;
+      throw new this.platform.api.hap.HapStatusError(this.platform.api.hap.HAPStatus.SERVICE_COMMUNICATION_FAILURE);
     }
   }
 
   async handleCurrentTemperatureGet() {
     try {
       const device = await this.hubController.getDevice(this.deviceUniqueId);
-      return device!.current_temp!;
+      if (!device || device.current_temp === undefined) {
+        throw new this.platform.api.hap.HapStatusError(this.platform.api.hap.HAPStatus.SERVICE_COMMUNICATION_FAILURE);
+      }
+      return device.current_temp;
     } catch (e: any) {
       this.platform.log.error('Sensor: error getting temperature');
       this.platform.log.error(e.message);
       this.platform.log.debug(e.stack);
-
-      return e;
+      throw new this.platform.api.hap.HapStatusError(this.platform.api.hap.HAPStatus.SERVICE_COMMUNICATION_FAILURE);
     }
   }
 
   async handleStatusLowBatteryGet() {
     try {
       const device = await this.hubController.getDevice(this.deviceUniqueId);
-      const currentValue = device!.at_low_battery ? this.platform.Characteristic.StatusLowBattery.BATTERY_LEVEL_LOW :
+      if (!device || device.at_low_battery === undefined) {
+        throw new this.platform.api.hap.HapStatusError(this.platform.api.hap.HAPStatus.SERVICE_COMMUNICATION_FAILURE);
+      }
+      const currentValue = device.at_low_battery ? this.platform.Characteristic.StatusLowBattery.BATTERY_LEVEL_LOW :
         this.platform.Characteristic.StatusLowBattery.BATTERY_LEVEL_NORMAL;
       return currentValue;
     } catch (e: any) {
       this.platform.log.error('Sensor: error getting battery status');
       this.platform.log.error(e.message);
       this.platform.log.debug(e.stack);
+      throw new this.platform.api.hap.HapStatusError(this.platform.api.hap.HAPStatus.SERVICE_COMMUNICATION_FAILURE);
+    }
+  }
 
-      return e;
+  private startPolling() {
+    const interval = this.platform.pollIntervalMs;
+    if (this.pollTimer) {
+      clearInterval(this.pollTimer);
+    }
+    // First run soon after start
+    setTimeout(() => {
+      this.pollOnce().catch(() => { /* already logged */ });
+    }, 2000);
+    this.pollTimer = setInterval(() => {
+      this.pollOnce().catch(() => { /* already logged */ });
+    }, interval);
+  }
+
+  private stopPolling() {
+    if (this.pollTimer) {
+      clearInterval(this.pollTimer);
+      this.pollTimer = undefined;
+    }
+  }
+
+  private async pollOnce() {
+    try {
+      const device = await this.hubController.getDevice(this.deviceUniqueId);
+      if (!device) {
+        return;
+      }
+      if (device.current_temp !== undefined) {
+        this.temperatureService.updateCharacteristic(
+          this.platform.Characteristic.CurrentTemperature,
+          device.current_temp,
+        );
+      }
+      if (device.current_humidity !== undefined) {
+        this.humidityService.updateCharacteristic(
+          this.platform.Characteristic.CurrentRelativeHumidity,
+          device.current_humidity,
+        );
+      }
+      if (device.at_low_battery !== undefined) {
+        const low = device.at_low_battery === true
+          ? this.platform.Characteristic.StatusLowBattery.BATTERY_LEVEL_LOW
+          : this.platform.Characteristic.StatusLowBattery.BATTERY_LEVEL_NORMAL;
+        this.temperatureService.updateCharacteristic(this.platform.Characteristic.StatusLowBattery, low);
+        this.humidityService.updateCharacteristic(this.platform.Characteristic.StatusLowBattery, low);
+      }
+    } catch (err) {
+      const msg = (err as Error)?.message ?? String(err);
+      this.platform.log.debug(`TempHumidity(${this.accessory.context.deviceUniqueId}) poll failed: ${msg}`);
     }
   }
 }
